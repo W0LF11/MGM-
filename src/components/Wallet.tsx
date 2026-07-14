@@ -52,14 +52,44 @@ export const Wallet: React.FC = () => {
   const [isSubmittingWd, setIsSubmittingWd] = useState<boolean>(false);
   const [wdSuccessMessage, setWdSuccessMessage] = useState<string | null>(null);
 
-  // File change handler for proof uploads
+  // File change handler for proof uploads with image compression
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setProofImage(reader.result as string);
-        setReceiptUploaded(true);
+        const img = new Image();
+        img.src = reader.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const max_size = 600; // max width/height to keep image size tiny but legible
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > max_size) {
+              height *= max_size / width;
+              width = max_size;
+            }
+          } else {
+            if (height > max_size) {
+              width *= max_size / height;
+              height = max_size;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            // Compress as JPEG with 0.6 quality (around 20-40KB)
+            const compressed = canvas.toDataURL('image/jpeg', 0.6);
+            setProofImage(compressed);
+            setReceiptUploaded(true);
+          } else {
+            setProofImage(reader.result as string);
+            setReceiptUploaded(true);
+          }
+        };
       };
       reader.readAsDataURL(file);
     }

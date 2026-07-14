@@ -862,18 +862,18 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         creditScore: currentUser.balance > 1000 ? 99 : 95
       };
 
-      // Query total pending withdrawals to calculate available balance
+      // Query total pending withdrawals to calculate available balance (using simple single-field query to avoid composite indexes)
       const q = query(
         collection(db, 'requests'),
-        where('userId', '==', currentUser.id),
-        where('type', '==', 'withdrawal'),
-        where('status', '==', 'pending')
+        where('userId', '==', currentUser.id)
       );
       const snap = await getDocs(q);
       let pendingTotal = 0;
       snap.forEach((dDoc) => {
         const d = dDoc.data();
-        pendingTotal += d.amount || 0;
+        if (d.type === 'withdrawal' && d.status === 'pending') {
+          pendingTotal += d.amount || 0;
+        }
       });
 
       // Atomically check current user's profile balance in database
