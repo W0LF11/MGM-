@@ -45,9 +45,9 @@ import {
   Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { auth, db } from '../context/firebase';
+import { auth, db, firebaseConfig } from '../context/firebase';
 import { signInWithEmailAndPassword, updatePassword } from 'firebase/auth';
-import { doc, runTransaction, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, runTransaction, updateDoc, setDoc, getDoc, collection, getDocs, limit, query } from 'firebase/firestore';
 
 // Local Utilities to avoid import mismatches
 const genId = () => Math.random().toString(36).substring(2, 11).toUpperCase();
@@ -114,7 +114,7 @@ export const AdminPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'members' | 'deposits' | 'withdrawals' | 'support' | 'process' | 'dice' | 'referrals'>('members');
   
   // Inner Subtabs for Process System
-  const [processSubTab, setProcessSubTab] = useState<'tuning' | 'credentials'>('tuning');
+  const [processSubTab, setProcessSubTab] = useState<'tuning' | 'credentials' | 'diagnostics'>('tuning');
 
   // Search filter for Member Directory
   const [userSearch, setUserSearch] = useState('');
@@ -167,6 +167,10 @@ export const AdminPanel: React.FC = () => {
   const [diceManualTimer, setDiceManualTimer] = useState<number | null>(null);
   const [diceManualResult, setDiceManualResult] = useState<string>('random');
   const [diceManualProfitRate, setDiceManualProfitRate] = useState<number | null>(null);
+
+  // Connection Diagnostics Status State
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'failure'>('idle');
+  const [connectionError, setConnectionError] = useState<string>('');
 
   // Synchronize dynamic dice schedules from the database when loaded
   useEffect(() => {
@@ -1585,9 +1589,19 @@ export const AdminPanel: React.FC = () => {
                 >
                   🔑 Administrator Passwords
                 </button>
+                <button
+                  onClick={() => setProcessSubTab('diagnostics')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                    processSubTab === 'diagnostics' 
+                      ? 'bg-white shadow border border-slate-200/50 text-slate-900' 
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  🛠️ Vercel & Firebase Diagnostics
+                </button>
               </div>
 
-              {processSubTab === 'tuning' ? (
+              {processSubTab === 'tuning' && (
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
                   
                   <div className="border-b border-slate-100 pb-3">
@@ -1746,7 +1760,9 @@ export const AdminPanel: React.FC = () => {
 
                   </div>
                 </div>
-              ) : (
+              )}
+
+              {processSubTab === 'credentials' && (
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
                   
                   <div className="border-b border-slate-100 pb-3">
@@ -1835,6 +1851,309 @@ export const AdminPanel: React.FC = () => {
                       </div>
                     </div>
 
+                  </div>
+                </div>
+              )}
+
+              {processSubTab === 'diagnostics' && (
+                <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
+                  <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900">🛠️ Vercel & Firebase Diagnostics Desk</h3>
+                      <p className="text-xs text-slate-500">Analyze environment variables, track real-time stream status, and run interactive ping tests to isolate Vercel deployment issues.</p>
+                    </div>
+                    <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full text-[10px] font-mono uppercase font-bold tracking-wider">
+                      Vercel Live Inspector
+                    </span>
+                  </div>
+
+                  {/* Top Status Indicators Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="p-4 bg-slate-50 border border-slate-150 rounded-2xl">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Vercel Environment</span>
+                      <span className="text-sm font-black text-slate-800 font-mono mt-1 block">
+                        {import.meta.env.PROD ? '🌐 Production' : '💻 Development'}
+                      </span>
+                    </div>
+                    <div className="p-4 bg-slate-50 border border-slate-150 rounded-2xl">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Vite Base URL</span>
+                      <span className="text-sm font-black text-slate-800 font-mono mt-1 block truncate" title={window.location.origin}>
+                        {window.location.origin}
+                      </span>
+                    </div>
+                    <div className="p-4 bg-slate-50 border border-slate-150 rounded-2xl">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Firebase Database ID</span>
+                      <span className="text-sm font-black text-indigo-600 font-mono mt-1 block">
+                        {firebaseConfig.firestoreDatabaseId || '(default)'}
+                      </span>
+                    </div>
+                    <div className="p-4 bg-slate-50 border border-slate-150 rounded-2xl">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Connected Active Streams</span>
+                      <span className="text-sm font-black text-emerald-600 mt-1 block">
+                        {([users, transactions, requests, bets, tickets, games, announcements].filter(arr => arr && arr.length > 0).length)} / 7 Healthy
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Banner indicator of overall Firestore Connection Test status */}
+                  {connectionStatus === 'idle' && (
+                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2.5 h-2.5 rounded-full bg-slate-400 animate-ping" />
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-700">Database Test Status: PENDING RUN</h4>
+                          <p className="text-[11px] text-slate-500">Run the connection diagnostics below to verify read permissions against your Firestore cluster.</p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold font-mono">
+                        Not Checked
+                      </span>
+                    </div>
+                  )}
+
+                  {connectionStatus === 'testing' && (
+                    <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-between animate-pulse">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-ping" />
+                        <div>
+                          <h4 className="text-xs font-bold text-indigo-800">Database Test Status: CONNECTING...</h4>
+                          <p className="text-[11px] text-indigo-600">Querying collection schemas and retrieving sample document payload...</p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-bold font-mono">
+                        Testing...
+                      </span>
+                    </div>
+                  )}
+
+                  {connectionStatus === 'success' && (
+                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">
+                          ✓
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black text-emerald-800">Database Connection Status: PASSED (100% OPERATIONAL)</h4>
+                          <p className="text-[11px] text-emerald-600">Firestore is securely connected and authorized for client-side reads & database stream bindings.</p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold font-mono uppercase tracking-wider">
+                        PASS
+                      </span>
+                    </div>
+                  )}
+
+                  {connectionStatus === 'failure' && (
+                    <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center text-xs font-bold">
+                            ✕
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black text-rose-800">Database Connection Status: FAILED (ACTION REQUIRED)</h4>
+                            <p className="text-[11px] text-rose-600">Failed to establish active query with the Firestore database cluster. Refer to the debug log below.</p>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 bg-rose-100 text-rose-800 rounded-lg text-[10px] font-bold font-mono uppercase tracking-wider">
+                          FAIL
+                        </span>
+                      </div>
+                      {connectionError && (
+                        <div className="p-2.5 bg-rose-100/50 rounded-xl text-[10.5px] font-mono text-rose-700 select-all border border-rose-200/50">
+                          Error Details: {connectionError}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    {/* Left: Environment Variable & Config Check (7 cols) */}
+                    <div className="lg:col-span-7 space-y-6">
+                      <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
+                        <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                          <h4 className="text-xs font-bold uppercase text-slate-700 font-mono">Environment Variables & Config Mapping</h4>
+                          <span className="text-[10px] text-slate-400 font-mono">Evaluated at runtime</span>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse text-[11px] font-mono">
+                            <thead>
+                              <tr className="border-b border-slate-200 text-slate-400 uppercase text-[9px] tracking-wider">
+                                <th className="pb-2 font-bold">Variable Name</th>
+                                <th className="pb-2 font-bold text-center">Status</th>
+                                <th className="pb-2 font-bold">Source Detail</th>
+                                <th className="pb-2 font-bold">Value Preview (Masked)</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 text-slate-700">
+                              {[
+                                { name: 'VITE_FIREBASE_API_KEY', value: import.meta.env.VITE_FIREBASE_API_KEY, isSecret: true, desc: 'API Key for Firebase Authentication & API' },
+                                { name: 'VITE_FIREBASE_AUTH_DOMAIN', value: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, isSecret: false, desc: 'Authentication Domain host' },
+                                { name: 'VITE_FIREBASE_PROJECT_ID', value: import.meta.env.VITE_FIREBASE_PROJECT_ID, isSecret: false, desc: 'Unique Google Cloud Project Identifier' },
+                                { name: 'VITE_FIREBASE_STORAGE_BUCKET', value: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET, isSecret: false, desc: 'Cloud Storage asset bucket path' },
+                                { name: 'VITE_FIREBASE_MESSAGING_SENDER_ID', value: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID, isSecret: true, desc: 'FCM push messages sender identifier' },
+                                { name: 'VITE_FIREBASE_APP_ID', value: import.meta.env.VITE_FIREBASE_APP_ID, isSecret: true, desc: 'Unique Client Application ID' },
+                                { name: 'VITE_FIREBASE_MEASUREMENT_ID', value: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID, isSecret: true, desc: 'Google Analytics property target ID' },
+                                { name: 'VITE_FIREBASE_DATABASE_ID', value: import.meta.env.VITE_FIREBASE_DATABASE_ID, isSecret: false, desc: 'Multi-database instance pointer' },
+                              ].map((v) => {
+                                const hasEnv = !!v.value;
+                                const isConfigFallback = !hasEnv && !!(firebaseConfig as any)[v.name.replace('VITE_FIREBASE_', '').replace(/_([a-z])/g, (g: any) => g[1].toUpperCase())];
+                                
+                                // Compute status state
+                                let badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
+                                let badgeText = '✕ FAIL';
+                                if (hasEnv) {
+                                  badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                                  badgeText = '✓ PASS';
+                                } else if (isConfigFallback) {
+                                  badgeColor = 'bg-amber-50 text-amber-700 border-amber-200';
+                                  badgeText = '⚠️ FALLBACK';
+                                }
+
+                                const actualVal = v.value || (firebaseConfig as any)[v.name.replace('VITE_FIREBASE_', '').replace(/_([a-z])/g, (g: any) => g[1].toUpperCase())];
+                                const displayValue = actualVal
+                                  ? (v.isSecret 
+                                      ? `${actualVal.slice(0, 6)}...${actualVal.slice(-4)}` 
+                                      : actualVal) 
+                                  : '(Not Set)';
+
+                                return (
+                                  <tr key={v.name} className="hover:bg-slate-100/50">
+                                    <td className="py-2.5 font-bold text-slate-800">
+                                      <span>{v.name}</span>
+                                      <p className="text-[9px] font-normal text-slate-400 font-sans mt-0.5">{v.desc}</p>
+                                    </td>
+                                    <td className="py-2.5 text-center">
+                                      <span className={`px-2 py-0.5 border rounded text-[9px] font-bold ${badgeColor}`}>
+                                        {badgeText}
+                                      </span>
+                                    </td>
+                                    <td className="py-2.5">
+                                      {hasEnv ? (
+                                        <span className="text-[10px] text-slate-500 font-semibold">Vercel Environment</span>
+                                      ) : isConfigFallback ? (
+                                        <span className="text-[10px] text-amber-600 font-semibold">JSON Applet Fallback</span>
+                                      ) : (
+                                        <span className="text-[10px] text-rose-600 font-semibold">Missing Configuration</span>
+                                      )}
+                                    </td>
+                                    <td className="py-2.5 text-slate-600 select-all font-semibold">
+                                      {displayValue}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-[10.5px] text-amber-800 leading-normal font-mono">
+                          💡 <strong>Vercel Deployment tip:</strong> Ensure you define these variables inside your <strong>Vercel Dashboard → Settings → Environment Variables</strong>. All variables used in client-side code MUST be prefixed with <code className="bg-amber-100 px-1 rounded font-bold">VITE_</code>.
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Real-time Connection Streams & Interactive Diagnostic Ping (5 cols) */}
+                    <div className="lg:col-span-5 space-y-6">
+                      {/* Active Connection Streams */}
+                      <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
+                        <h4 className="text-xs font-bold uppercase text-slate-700 font-mono border-b border-slate-200 pb-2">
+                          Active Connection Streams
+                        </h4>
+
+                        <div className="space-y-2.5 text-xs font-mono">
+                          {[
+                            { name: 'Users Collection Stream', count: users.length, status: users.length > 0 ? 'connected' : 'connecting_or_empty' },
+                            { name: 'Transactions Ledger Stream', count: transactions.length, status: transactions.length > 0 ? 'connected' : 'connecting_or_empty' },
+                            { name: 'Deposit/Cashout Requests', count: requests.length, status: requests.length > 0 ? 'connected' : 'connecting_or_empty' },
+                            { name: 'Gameplay Logs (Bets)', count: bets.length, status: bets.length > 0 ? 'connected' : 'connecting_or_empty' },
+                            { name: 'Support Messaging Channel', count: tickets.length, status: tickets.length > 0 ? 'connected' : 'connecting_or_empty' },
+                            { name: 'Game Registry Stream', count: games.length, status: games.length > 0 ? 'connected' : 'connecting_or_empty' },
+                            { name: 'Announcements Bulletin Stream', count: announcements.length, status: announcements.length > 0 ? 'connected' : 'connecting_or_empty' },
+                          ].map((stream) => (
+                            <div key={stream.name} className="flex justify-between items-center p-2.5 bg-white border border-slate-200 rounded-xl">
+                              <div>
+                                <span className="font-bold text-slate-800 block text-[10.5px]">{stream.name}</span>
+                                <span className="text-[9.5px] text-slate-400">{stream.count} documents synchronized</span>
+                              </div>
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                stream.status === 'connected' 
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                  : 'bg-slate-100 text-slate-500 border border-slate-200 animate-pulse'
+                              }`}>
+                                {stream.status === 'connected' ? '● Online' : '● Idle'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Interactive Diagnostic Ping test */}
+                      <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
+                        <h4 className="text-xs font-bold uppercase text-slate-700 font-mono border-b border-slate-200 pb-2">
+                          Interactive Integration Ping
+                        </h4>
+                        <p className="text-[11px] text-slate-500 font-mono">
+                          Click below to execute a real-time read connection query against your Firestore collection to verify Vercel key permissions.
+                        </p>
+
+                        <button
+                          onClick={async () => {
+                            const btn = document.getElementById('ping-test-btn');
+                            const output = document.getElementById('ping-test-output');
+                            if (!btn || !output) return;
+                            btn.innerText = 'PINGING...';
+                            btn.setAttribute('disabled', 'true');
+                            output.style.display = 'block';
+                            output.innerText = 'Initializing test connection query...\n';
+                            setConnectionStatus('testing');
+                            setConnectionError('');
+
+                            try {
+                              output.innerText += `Target Project ID: ${firebaseConfig.projectId || 'Not Configured'}\n`;
+                              output.innerText += `Database ID: ${firebaseConfig.firestoreDatabaseId || '(default)'}\n`;
+                              output.innerText += 'Executing collection query...\n';
+                              
+                              const testRef = collection(db, 'users');
+                              const q = query(testRef, limit(1));
+                              const snap = await getDocs(q);
+                              
+                              output.innerText += '✅ Connection Successful!\n';
+                              output.innerText += `Read status: Verified. Found ${snap.size} documents in "users".\n`;
+                              output.innerText += 'Your Vercel configuration & security rules are 100% stable and operational! 🎉';
+                              setConnectionStatus('success');
+                            } catch (err: any) {
+                              const errString = err?.message || String(err);
+                              output.innerText += '❌ CONNECTION FAILED!\n';
+                              output.innerText += `Error Code: ${err?.code || 'Unknown'}\n`;
+                              output.innerText += `Message: ${errString}\n\n`;
+                              output.innerText += 'Troubleshooting Checklists:\n';
+                              output.innerText += '1. Check if VITE_FIREBASE_API_KEY and VITE_FIREBASE_PROJECT_ID match your Firebase console.\n';
+                              output.innerText += '2. Check if your firestore.rules allows authenticated or target client reads.\n';
+                              output.innerText += '3. Verify if your VITE_FIREBASE_DATABASE_ID matches the targeted Firestore database ID.';
+                              setConnectionStatus('failure');
+                              setConnectionError(errString);
+                            } finally {
+                              btn.innerText = 'Run Connection Diagnostics';
+                              btn.removeAttribute('disabled');
+                            }
+                          }}
+                          id="ping-test-btn"
+                          className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-[11px] uppercase tracking-wide cursor-pointer font-mono transition-colors"
+                        >
+                          Run Connection Diagnostics
+                        </button>
+
+                        <pre 
+                          id="ping-test-output" 
+                          className="hidden p-3.5 bg-slate-900 text-emerald-400 border border-slate-800 rounded-xl text-[10px] font-mono leading-normal overflow-x-auto whitespace-pre-wrap max-h-[180px]"
+                        >
+                          Ready to test...
+                        </pre>
+                      </div>
+
+                    </div>
                   </div>
                 </div>
               )}

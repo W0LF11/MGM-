@@ -95,6 +95,12 @@ export const Wallet: React.FC = () => {
     }
   };
 
+  const handleAutoFillReceipt = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setProofImage('https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=400&h=300&q=80');
+    setReceiptUploaded(true);
+  };
+
   // Process Deposit Request Submission
   const handleDepositSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -455,9 +461,20 @@ export const Wallet: React.FC = () => {
 
                     {/* Unified Proof Image File Upload */}
                     <div className="space-y-2">
-                      <label className="block text-[10px] font-mono uppercase font-bold text-slate-400 tracking-wider">
-                        Payment Receipt Proof
-                      </label>
+                      <div className="flex items-center justify-between">
+                        <label className="block text-[10px] font-mono uppercase font-bold text-slate-400 tracking-wider">
+                          Payment Receipt Proof
+                        </label>
+                        {!receiptUploaded && (
+                          <button
+                            type="button"
+                            onClick={handleAutoFillReceipt}
+                            className="text-[10px] text-emerald-400 hover:text-emerald-300 font-mono font-bold uppercase transition-colors cursor-pointer"
+                          >
+                            [⚡ Auto-Fill Demo Receipt]
+                          </button>
+                        )}
+                      </div>
                       <input
                         type="file"
                         accept="image/*"

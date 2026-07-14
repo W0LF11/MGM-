@@ -794,29 +794,51 @@ export const Dashboard: React.FC = () => {
                 <span className="p-1.5 bg-amber-50 dark:bg-amber-950/30 rounded-lg text-amber-500">
                   <Shield className="h-4 w-4" />
                 </span>
-                <h3 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">
-                  Commercial Terms & Regulatory Conditions
+                <h3 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide animate-pulse">
+                  商業條款與合規監管條件
                 </h3>
               </div>
 
               {/* Modal Body */}
               <div className="text-xs text-slate-500 dark:text-slate-400 space-y-3 leading-relaxed font-mono max-h-[300px] overflow-y-auto pr-1">
-                <p>
-                  Welcome to the <strong className="text-slate-800 dark:text-white">MGM 澳門美高梅 PREMIUM CASINO PLATFORM</strong>. By accessing your personal user console panel, you acknowledge and agree to comply with the secure commercial frameworks declared below:
+                <p className="text-slate-700 dark:text-slate-300">
+                  歡迎來到 <strong className="text-slate-900 dark:text-white">MGM 澳門美高梅尊尚娛樂平台</strong>。登錄並訪問您的個人用戶控制面板，即表示您確認並同意遵守以下聲明的安全商業框架：
                 </p>
+                
                 <div className="space-y-3 pt-2">
                   <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-150/40 dark:border-slate-850">
-                    <span className="font-extrabold text-slate-700 dark:text-slate-200 block text-[10px] uppercase mb-1">1. VIP Clearance Protocol</span>
-                    <span>The executive board retains final authority to lock system games, re-calibrate RTP index rates, and apply VIP permissions. Restricted VIP systems require specific account clearances.</span>
+                    <span className="font-extrabold text-amber-600 dark:text-amber-400 block text-[10px] uppercase mb-1">
+                      1. VIP 權限清除協議
+                    </span>
+                    <span className="text-slate-800 dark:text-slate-200 font-medium block">
+                      執行委員會保留鎖定系統遊戲、重新校準玩家返還率指數以及應用 VIP 權限的最終權力。受限制的 VIP 系統需要特定的賬戶許可。
+                    </span>
                   </div>
+                  
                   <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-150/40 dark:border-slate-850">
-                    <span className="font-extrabold text-slate-700 dark:text-slate-200 block text-[10px] uppercase mb-1">2. Financial Settlement Limits</span>
-                    <span>All simulated deposits, bonuses, and ledger balances are bound strictly to this local workspace profile. Ledger audits are cleared hourly with zero external liability.</span>
+                    <span className="font-extrabold text-amber-600 dark:text-amber-400 block text-[10px] uppercase mb-1">
+                      2. 財務結算限額
+                    </span>
+                    <span className="text-slate-800 dark:text-slate-200 font-medium block">
+                      所有模擬存款、獎金和分類賬餘額均嚴格綁定至此本地工作區配置文件。分類賬審計每小時自動清除，且無任何外部責任或實際法律義務。
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-150/40 dark:border-slate-850">
+                    <span className="font-extrabold text-amber-600 dark:text-amber-400 block text-[10px] uppercase mb-1">
+                      3. 安全防護與合規審計
+                    </span>
+                    <span className="text-slate-800 dark:text-slate-200 font-medium block">
+                      MGM 平台配備最先進的本地加密與會話保護技術，確保所有模擬操作和 VIP 帳戶活動都在最高安全級別下進行。用戶有義務維護會話安全。
+                    </span>
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800">
-                  LEGAL NOTE: Accessing these security directives is fully private to verified local user sessions. This keeps confidential guidelines shielded from general public views.
-                </p>
+                
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                    法律聲明：訪問這些安全指令對經過驗證的本地用戶會話完全私密。這使機密準則免受公眾視圖的影響。
+                  </p>
+                </div>
               </div>
 
               {/* Modal Footer */}
