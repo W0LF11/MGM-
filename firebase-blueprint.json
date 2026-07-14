@@ -1,0 +1,226 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile, balance, and metadata in the system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique user authentication ID" },
+        "username": { "type": "string", "description": "Unique username chosen by player" },
+        "email": { "type": "string", "description": "User registered email address" },
+        "phone": { "type": "string", "description": "Mobile phone number of user" },
+        "balance": { "type": "number", "description": "Available cash wallet balance" },
+        "bonusBalance": { "type": "number", "description": "Bonus balance for spins or games" },
+        "role": { "type": "string", "enum": ["user", "support", "admin"], "description": "User authorization tier" },
+        "isEmailVerified": { "type": "boolean", "description": "Whether email OTP is verified" },
+        "isMobileVerified": { "type": "boolean", "description": "Whether SMS OTP is verified" },
+        "status": { "type": "string", "enum": ["active", "suspended"], "description": "The user account status" },
+        "avatar": { "type": "string", "description": "Selected avatar emoji" },
+        "creditScore": { "type": "number", "description": "Calculated user credit score for withdrawal safety gate" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of registration" },
+        "vipLevel": { "type": "number", "description": "User loyalty or VIP ranking" },
+        "referralCode": { "type": "string", "description": "User self referral promotion code" },
+        "referredBy": { "type": "string", "description": "The user referral code of who invited this user" },
+        "referralsCount": { "type": "number", "description": "Total count of referred users" },
+        "referralEarnings": { "type": "number", "description": "Accrued affiliate dividends" }
+      },
+      "required": ["id", "username", "email", "balance", "bonusBalance", "role", "status"]
+    },
+    "Request": {
+      "title": "Request",
+      "description": "A submission for recharge/deposit or cashout/withdrawal requiring manual audit",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique request ID" },
+        "userId": { "type": "string", "description": "ID of user submitting the request" },
+        "username": { "type": "string", "description": "Username of the submitting player" },
+        "type": { "type": "string", "enum": ["deposit", "withdrawal"], "description": "Request ledger category" },
+        "amount": { "type": "number", "description": "Requested transaction value" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "description": "Current workflow state" },
+        "reference": { "type": "string", "description": "Bank UTR code, crypto transaction hash, or standard tracking string" },
+        "gateway": { "type": "string", "description": "The network gateway or payment method used" },
+        "date": { "type": "string", "description": "ISO creation timestamp of the request" },
+        "screenshot": { "type": "string", "description": "Verification screenshot URL or data URL" },
+        "details": { "type": "string", "description": "Target payout details (such as wallet address or bank account)" },
+        "creditScore": { "type": "number", "description": "The user's credit score at the time of submission" },
+        "approvedBy": { "type": "string", "description": "Admin UID who manual-audited and approved" },
+        "rejectedBy": { "type": "string", "description": "Admin UID who manual-audited and rejected" },
+        "rejectionReason": { "type": "string", "description": "Reason for rejecting the request" }
+      },
+      "required": ["id", "userId", "username", "type", "amount", "status", "reference", "gateway", "date"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Historical cleared record log of deposits, withdrawals, bet wagers, and commissions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique historical transaction ID" },
+        "userId": { "type": "string", "description": "The user associated with this log entry" },
+        "username": { "type": "string", "description": "Username of the player" },
+        "type": { "type": "string", "enum": ["deposit", "withdrawal", "bet", "win", "referral", "admin_adjustment"], "description": "The type of ledger entry" },
+        "amount": { "type": "number", "description": "The value of this ledger entry" },
+        "status": { "type": "string", "enum": ["completed", "failed", "refunded", "rejected"], "description": "The final state of this transaction" },
+        "reference": { "type": "string", "description": "Associated request reference, bet ID, or reference tracking code" },
+        "date": { "type": "string", "description": "ISO settlement date" },
+        "description": { "type": "string", "description": "Human-readable descriptor of the entry" }
+      },
+      "required": ["id", "userId", "username", "type", "amount", "status", "reference", "date"]
+    },
+    "Bet": {
+      "title": "Bet",
+      "description": "A single gameplay wager transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique game wager identifier" },
+        "gameId": { "type": "string", "description": "Identifier of the game played" },
+        "gameName": { "type": "string", "description": "Display name of the game played" },
+        "userId": { "type": "string", "description": "Player UID" },
+        "username": { "type": "string", "description": "Username of the player" },
+        "betAmount": { "type": "number", "description": "The value wagered" },
+        "winAmount": { "type": "number", "description": "The settled win amount" },
+        "multiplier": { "type": "number", "description": "The settled bet multiplier" },
+        "outcome": { "type": "string", "description": "Display of multiplier or lost outcome text" },
+        "date": { "type": "string", "description": "ISO gameplay timestamp" },
+        "status": { "type": "string", "enum": ["win", "loss"], "description": "The gameplay settlement result" }
+      },
+      "required": ["id", "gameId", "gameName", "userId", "username", "betAmount", "winAmount", "multiplier", "date", "status"]
+    },
+    "Ticket": {
+      "title": "Ticket",
+      "description": "Customer support interaction tickets",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique helpdesk ticket ID" },
+        "userId": { "type": "string", "description": "User UID who submitted this help desk item" },
+        "username": { "type": "string", "description": "Submitting player's username" },
+        "title": { "type": "string", "description": "A brief summary or topic title" },
+        "category": { "type": "string", "description": "The ticket classification department" },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"], "description": "The urgency priority level" },
+        "status": { "type": "string", "enum": ["open", "replied", "resolved"], "description": "The current ticketing state" },
+        "date": { "type": "string", "description": "ISO ticket submission timestamp" },
+        "lastActivity": { "type": "string", "description": "ISO timestamp of last activity" },
+        "messages": { "type": "array", "description": "Array of dialog messages" },
+        "isTyping": { "type": "object", "description": "Typing indicators for user and support" }
+      },
+      "required": ["id", "userId", "username", "title", "category", "priority", "status", "date", "lastActivity"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Global CMS header or promotional panel announcement",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique banner ID" },
+        "title": { "type": "string", "description": "Heading text of announcement banner" },
+        "content": { "type": "string", "description": "Body message or details of announcement" },
+        "type": { "type": "string", "enum": ["announcement", "promotion", "event"], "description": "Classification of the banner" },
+        "date": { "type": "string", "description": "ISO publication date" },
+        "isActive": { "type": "boolean", "description": "Whether this announcement is visible to users" },
+        "bannerImage": { "type": "string", "description": "Name of the display gradient style" }
+      },
+      "required": ["id", "title", "content", "type", "date", "isActive"]
+    },
+    "Game": {
+      "title": "Game",
+      "description": "Active casino mini-games state config and telemetry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the game" },
+        "name": { "type": "string", "description": "Display name of game" },
+        "totalBets": { "type": "number", "description": "Total wagers placed" },
+        "totalVolume": { "type": "number", "description": "Total cash bet volume" },
+        "rtp": { "type": "number", "description": "Return to player percentage" },
+        "minBet": { "type": "number", "description": "Minimum allowed stake" },
+        "maxBet": { "type": "number", "description": "Maximum allowed stake" },
+        "isActive": { "type": "boolean", "description": "Whether the game is currently online" },
+        "isLocked": { "type": "boolean", "description": "Whether the game is locked for review" },
+        "lockReason": { "type": "string", "description": "Custom lock overlay notification text" }
+      },
+      "required": ["id", "name", "totalBets", "totalVolume", "rtp", "minBet", "maxBet", "isActive", "isLocked"]
+    },
+    "BankAccount": {
+      "title": "BankAccount",
+      "description": "Subscribed electronic cashout payment accounts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique bank record ID" },
+        "userId": { "type": "string", "description": "The user owning this bank detail" },
+        "bankName": { "type": "string", "description": "Registered name of banking house" },
+        "accountHolder": { "type": "string", "description": "Beneficiary name on bank account" },
+        "accountNumber": { "type": "string", "description": "Standard electronic bank account number" },
+        "routingCode": { "type": "string", "description": "Routing code or Swift transit key" }
+      },
+      "required": ["id", "userId", "bankName", "accountHolder", "accountNumber", "routingCode"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Stores in-app messages and automated alerts sent to players",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique notification ID" },
+        "userId": { "type": "string", "description": "Optional UID of user receiving this alert" },
+        "title": { "type": "string", "description": "Alert title" },
+        "message": { "type": "string", "description": "Brief message content" },
+        "type": { "type": "string", "enum": ["account", "wallet", "referral", "system", "achievement", "support"], "description": "Category of message" },
+        "isRead": { "type": "boolean", "description": "Read status" },
+        "timestamp": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["id", "title", "message", "type", "isRead", "timestamp"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable, permanent administrative action audit logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique log record ID" },
+        "userId": { "type": "string", "description": "UID of user targeted by adjustment" },
+        "type": { "type": "string", "description": "Audit category" },
+        "amount": { "type": "number", "description": "Value or status of adjustment" },
+        "description": { "type": "string", "description": "Human-readable administrative reason" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["id", "userId", "type", "amount", "description", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Stores user public profile, wallet levels, and affiliate statistics"
+    },
+    "/requests/{requestId}": {
+      "schema": "Request",
+      "description": "Stores manual audit deposit and withdrawal requests"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Permanent audit ledger history of all transactions"
+    },
+    "/bets/{betId}": {
+      "schema": "Bet",
+      "description": "Stores all gameplay wagers and multiplier outcomes"
+    },
+    "/tickets/{ticketId}": {
+      "schema": "Ticket",
+      "description": "Stores user and support representative chat interaction records"
+    },
+    "/announcements/{announcementId}": {
+      "schema": "Announcement",
+      "description": "Stores promotional banners published by admin panel"
+    },
+    "/games/{gameId}": {
+      "schema": "Game",
+      "description": "Configuration metadata and telemetry statistics of each mini-game"
+    },
+    "/bankAccounts/{bankAccountId}": {
+      "schema": "BankAccount",
+      "description": "Saves verified withdrawal payout destinations"
+    },
+    "/notifications/{notifId}": {
+      "schema": "Notification",
+      "description": "Stores system and account notifications"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Saves historical administrator audit logs"
+    }
+  }
+}

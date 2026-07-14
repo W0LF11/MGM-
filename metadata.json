@@ -1,0 +1,6 @@
+{
+  "name": "Lucky Panda",
+  "description": "A comprehensive, high-fidelity online gaming platform featuring interactive games, a wallet system, administrative controls, support center, and live analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
