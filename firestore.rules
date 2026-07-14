@@ -31,7 +31,8 @@ service cloud.firestore {
         ('email' in request.auth.token && request.auth.token.email == 'vishalpal@gmail.com') ||
         ('email' in request.auth.token && request.auth.token.email == 'admin@luckyplatform.com') ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin')
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin' ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'super_admin'))
       );
     }
 
@@ -42,6 +43,7 @@ service cloud.firestore {
         ('email' in request.auth.token && request.auth.token.email == 'admin@luckyplatform.com') ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin' ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'super_admin' ||
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'support'))
       );
     }
@@ -132,7 +134,7 @@ service cloud.firestore {
             (incoming().balance == 10 || incoming().balance == 0) && 
             (incoming().bonusBalance == 50 || incoming().bonusBalance == 0)) ||
            // Explicit pre-registered admins
-           (incoming().role == 'admin' &&
+           ((incoming().role == 'admin' || incoming().role == 'super_admin') &&
             (('email' in request.auth.token && request.auth.token.email == 'wolfsingh1110@gmail.com') ||
              ('email' in request.auth.token && request.auth.token.email == 'vishalpal@gmail.com') ||
              ('email' in request.auth.token && request.auth.token.email == 'admin@luckyplatform.com')) &&
@@ -140,8 +142,8 @@ service cloud.firestore {
             (incoming().balance == 10 || incoming().balance == 0) && 
             (incoming().bonusBalance == 50 || incoming().bonusBalance == 0)) ||
            // Secret admin creation
-           (incoming().role == 'admin' &&
-            incoming().get('adminCode', '') == 'MGM_ADMIN_SECRET_KEY_2026' &&
+           ((incoming().role == 'admin' || incoming().role == 'super_admin') &&
+            (incoming().get('adminCode', '') == 'MGM_ADMIN_SECRET_KEY_2026' || incoming().get('adminCode', '') == 'MGM_SUPER_ADMIN_SECRET_KEY_2026') &&
             incoming().status == 'active' &&
             incoming().balance == 0 &&
             incoming().bonusBalance == 0)

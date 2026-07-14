@@ -121,12 +121,13 @@ export const Wallet: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       let errorMsg = 'Failed to submit deposit request. Please try again.';
-      if (err instanceof Error) {
+      if (err) {
+        const message = err.message || String(err);
         try {
-          const parsed = JSON.parse(err.message);
-          errorMsg = `Failed to submit deposit request: ${parsed.error || err.message}`;
+          const parsed = JSON.parse(message);
+          errorMsg = `Failed to submit deposit request: ${parsed.error || message}`;
         } catch {
-          errorMsg = `Failed to submit deposit request: ${err.message}`;
+          errorMsg = `Failed to submit deposit request: ${message}`;
         }
       }
       alert(errorMsg);
@@ -186,9 +187,19 @@ export const Wallet: React.FC = () => {
         setWdAccountNumber('');
         setWdRouting('');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to submit withdrawal request.');
+      let errorMsg = 'Failed to submit withdrawal request.';
+      if (err) {
+        const message = err.message || String(err);
+        try {
+          const parsed = JSON.parse(message);
+          errorMsg = `Failed to submit withdrawal request: ${parsed.error || message}`;
+        } catch {
+          errorMsg = `Failed to submit withdrawal request: ${message}`;
+        }
+      }
+      alert(errorMsg);
     } finally {
       setIsSubmittingWd(false);
     }
