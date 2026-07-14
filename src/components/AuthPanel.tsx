@@ -294,34 +294,6 @@ export const AuthPanel: React.FC = () => {
               )}
             </AnimatePresence>
 
-            {/* Admin Code (Sign Up Only) */}
-            <AnimatePresence initial={false}>
-              {isSignUp && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="space-y-1.5 overflow-hidden"
-                >
-                  <label className="text-[10px] font-mono text-amber-400 uppercase tracking-wider font-bold block flex justify-between">
-                    <span>Admin Activation Code <span className="text-[9px] text-slate-600 font-normal">(Optional)</span></span>
-                    <span className="text-[8px] text-slate-500 lowercase font-normal">Use MGM_ADMIN_SECRET_KEY_2026</span>
-                  </label>
-                  <div className="relative">
-                    <Shield className="absolute left-3.5 top-3 h-4 w-4 text-amber-500/70" />
-                    <input
-                      type="password"
-                      placeholder="Enter secret admin key to elevate account"
-                      value={adminCode}
-                      onChange={(e) => setAdminCode(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-950 rounded-xl border border-slate-800 text-xs text-amber-200 placeholder-slate-700 focus:outline-none focus:border-amber-500 font-mono"
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
             {/* Error Message */}
             <AnimatePresence>
               {error && (

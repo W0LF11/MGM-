@@ -456,6 +456,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     let unsubTransactions: () => void;
     let unsubRequests: () => void;
     let unsubAllUsers: (() => void) | undefined;
+    let unsubReferredUsers: (() => void) | undefined;
     let unsubAllBets: () => void;
     let unsubNotifications: () => void;
 
@@ -581,6 +582,20 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           handleFirestoreError(error, OperationType.GET, 'notifications');
         }
       );
+
+      unsubReferredUsers = onSnapshot(
+        query(collection(db, 'users'), where('referredBy', '==', uid)),
+        (snap) => {
+          const list: UserProfile[] = [];
+          snap.forEach(d => {
+            list.push(d.data() as UserProfile);
+          });
+          setUsers(list);
+        },
+        (error) => {
+          handleFirestoreError(error, OperationType.GET, 'referred_users');
+        }
+      );
     }
 
     return () => {
@@ -592,6 +607,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       unsubAllBets();
       unsubNotifications();
       if (unsubAllUsers) unsubAllUsers();
+      if (unsubReferredUsers) unsubReferredUsers();
     };
   }, [currentUser?.id, currentUser?.role]);
 
@@ -712,9 +728,16 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       
       let referrerId: string | undefined;
       if (referralCode) {
-        // Find referrer in local list of users
-        const r = users.find(u => u.referralCode.toUpperCase() === referralCode.toUpperCase());
-        if (r) referrerId = r.id;
+        try {
+          const usersRef = collection(db, 'users');
+          const q = query(usersRef, where('referralCode', '==', referralCode.toUpperCase().trim()));
+          const querySnapshot = await getDocs(q);
+          if (!querySnapshot.empty) {
+            referrerId = querySnapshot.docs[0].id;
+          }
+        } catch (e) {
+          console.error('Error querying referrer:', e);
+        }
       }
 
       const emailLower = email.toLowerCase();

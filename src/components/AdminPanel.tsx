@@ -120,7 +120,7 @@ export const AdminPanel: React.FC = () => {
   const [userSearch, setUserSearch] = useState('');
 
   // Role filter for listing players and admins both
-  const [roleFilter, setRoleFilter] = useState<'all' | 'user' | 'admin'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'user' | 'admin'>('user');
 
   // Track which users have their inline DiceController expanded
   const [expandedDiceUsers, setExpandedDiceUsers] = useState<Record<string, boolean>>({});
@@ -948,18 +948,8 @@ export const AdminPanel: React.FC = () => {
                   {/* Role filter buttons */}
                   <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-[10px] font-mono font-bold shrink-0">
                     <button
-                      onClick={() => setRoleFilter('all')}
-                      className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                        roleFilter === 'all'
-                          ? 'bg-white text-slate-900 shadow-sm'
-                          : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                    >
-                      All ({users.length})
-                    </button>
-                    <button
                       onClick={() => setRoleFilter('user')}
-                      className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      className={`px-4 py-1.5 rounded-lg transition-all cursor-pointer ${
                         roleFilter === 'user'
                           ? 'bg-white text-emerald-600 shadow-sm'
                           : 'text-slate-500 hover:text-slate-800'
@@ -969,7 +959,7 @@ export const AdminPanel: React.FC = () => {
                     </button>
                     <button
                       onClick={() => setRoleFilter('admin')}
-                      className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      className={`px-4 py-1.5 rounded-lg transition-all cursor-pointer ${
                         roleFilter === 'admin'
                           ? 'bg-white text-indigo-600 shadow-sm'
                           : 'text-slate-500 hover:text-slate-800'

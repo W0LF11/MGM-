@@ -222,13 +222,6 @@ const MainAppContent: React.FC = () => {
                 </div>
                 
                 <button
-                  onClick={() => setRole('user')}
-                  className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-[10px] font-bold text-slate-300 border border-slate-700/50 transition-all uppercase"
-                >
-                  Switch to Player View
-                </button>
-
-                <button
                   onClick={logout}
                   className="px-3.5 py-1.5 bg-rose-950/40 hover:bg-rose-950/80 rounded-xl text-[10px] font-bold text-rose-400 border border-rose-500/20 transition-all uppercase"
                 >

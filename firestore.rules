@@ -121,8 +121,8 @@ service cloud.firestore {
 
     // COLLECTION: USERS
     match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isSupport());
-      allow list: if isSignedIn() && (isAdmin() || isSupport());
+      allow get: if isSignedIn() && (request.auth.uid == userId || resource.data.referredBy == request.auth.uid || isAdmin() || isSupport());
+      allow list: if isSignedIn() && (isAdmin() || isSupport() || resource.data.referredBy == request.auth.uid);
       allow create: if isSignedIn() && (
         (request.auth.uid == userId && 
          isValidUser(incoming()) &&
