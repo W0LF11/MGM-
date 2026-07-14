@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePlatform } from '../context/PlatformContext';
 import mgmLogo from '../assets/images/mgm_logo_1783507972249.jpg';
 import { motion, AnimatePresence } from 'motion/react';
@@ -18,6 +18,20 @@ export const AuthPanel: React.FC = () => {
   const [password, setPassword] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [adminCode, setAdminCode] = useState('');
+
+  // Auto-capture referral code from URL parameters
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const ref = params.get('ref');
+      if (ref) {
+        setReferralCode(ref.toUpperCase().trim());
+        setIsSignUp(true);
+      }
+    } catch (e) {
+      console.error('Error parsing referral URL search param:', e);
+    }
+  }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();

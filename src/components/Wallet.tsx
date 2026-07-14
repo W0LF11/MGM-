@@ -118,9 +118,18 @@ export const Wallet: React.FC = () => {
       setProofImage('');
       setReceiptUploaded(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to submit deposit request. Please try again.');
+      let errorMsg = 'Failed to submit deposit request. Please try again.';
+      if (err instanceof Error) {
+        try {
+          const parsed = JSON.parse(err.message);
+          errorMsg = `Failed to submit deposit request: ${parsed.error || err.message}`;
+        } catch {
+          errorMsg = `Failed to submit deposit request: ${err.message}`;
+        }
+      }
+      alert(errorMsg);
     } finally {
       setIsSubmittingDep(false);
     }

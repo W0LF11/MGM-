@@ -885,7 +885,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         
         const availableBalance = parseFloat((userData.balance - pendingTotal).toFixed(2));
         if (availableBalance < amount) {
-          throw new Error(`Insufficient available balance! Balance: ₹${userData.balance.toLocaleString('en-IN')}, Pending: ₹${pendingTotal.toLocaleString('en-IN')}, Available: ₹${availableBalance.toLocaleString('en-IN')}`);
+          throw new Error(`Insufficient available balance! Balance: $${userData.balance.toFixed(2)}, Pending: $${pendingTotal.toFixed(2)}, Available: $${availableBalance.toFixed(2)}`);
         }
 
         // Just write the pending request - DO NOT DEDUCT the balance yet!
@@ -894,13 +894,22 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       });
 
       if (success) {
-        addLocalNotification('Withdrawal Submitted', `Your withdrawal of ₹${amount.toLocaleString('en-IN')} has been submitted for audit.`, 'wallet');
+        addLocalNotification('Withdrawal Submitted', `Your withdrawal of $${amount.toFixed(2)} has been submitted for audit.`, 'wallet');
         return true;
       }
       return false;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Withdrawal submission failed:', err);
-      alert(err instanceof Error ? err.message : 'Submission failed');
+      let errorMsg = 'Withdrawal submission failed. Please try again.';
+      if (err instanceof Error) {
+        try {
+          const parsed = JSON.parse(err.message);
+          errorMsg = `Withdrawal submission failed: ${parsed.error || err.message}`;
+        } catch {
+          errorMsg = err.message;
+        }
+      }
+      alert(errorMsg);
       return false;
     }
   };
