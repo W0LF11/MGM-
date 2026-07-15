@@ -45,9 +45,9 @@ import {
   Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { auth, db, firebaseConfig } from '../context/firebase';
+import { auth, db } from '../context/firebase';
 import { signInWithEmailAndPassword, updatePassword } from 'firebase/auth';
-import { doc, runTransaction, updateDoc, setDoc, getDoc, collection, getDocs, limit, query } from 'firebase/firestore';
+import { doc, runTransaction, updateDoc, setDoc } from 'firebase/firestore';
 
 // Local Utilities to avoid import mismatches
 const genId = () => Math.random().toString(36).substring(2, 11).toUpperCase();
@@ -86,6 +86,9 @@ export const AdminPanel: React.FC = () => {
     adminUpdateDiceSchedules,
     adminUpdateDiceManualFields,
     adminSendNotification,
+    adminInjectJackpotWinner,
+    adminInjectJackpotTicket,
+    jackpotTickets = [],
     currentRole,
     logout
   } = usePlatform();
@@ -110,11 +113,11 @@ export const AdminPanel: React.FC = () => {
   };
 
   // Main active sidebar tab matching the screenshot exactly
-  // Options: 'members' | 'deposits' | 'withdrawals' | 'support' | 'process' | 'dice' | 'referrals'
-  const [activeTab, setActiveTab] = useState<'members' | 'deposits' | 'withdrawals' | 'support' | 'process' | 'dice' | 'referrals'>('members');
+  // Options: 'members' | 'deposits' | 'withdrawals' | 'support' | 'process' | 'dice' | 'referrals' | 'jackpot'
+  const [activeTab, setActiveTab] = useState<'members' | 'deposits' | 'withdrawals' | 'support' | 'process' | 'dice' | 'referrals' | 'jackpot'>('members');
   
   // Inner Subtabs for Process System
-  const [processSubTab, setProcessSubTab] = useState<'tuning' | 'credentials' | 'diagnostics'>('tuning');
+  const [processSubTab, setProcessSubTab] = useState<'tuning' | 'credentials'>('tuning');
 
   // Search filter for Member Directory
   const [userSearch, setUserSearch] = useState('');
@@ -168,9 +171,11 @@ export const AdminPanel: React.FC = () => {
   const [diceManualResult, setDiceManualResult] = useState<string>('random');
   const [diceManualProfitRate, setDiceManualProfitRate] = useState<number | null>(null);
 
-  // Connection Diagnostics Status State
-  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'failure'>('idle');
-  const [connectionError, setConnectionError] = useState<string>('');
+  // Jackpot administration states
+  const [manualTicketNumber, setManualTicketNumber] = useState('');
+  const [injectLoading, setInjectLoading] = useState(false);
+  const [injectError, setInjectError] = useState('');
+  const [injectSuccess, setInjectSuccess] = useState('');
 
   // Synchronize dynamic dice schedules from the database when loaded
   useEffect(() => {
@@ -184,6 +189,36 @@ export const AdminPanel: React.FC = () => {
       setDiceManualProfitRate(diceGame.manualProfitRate ?? null);
     }
   }, [games]);
+
+  const handleInjectWinner = async (ticketNum: string) => {
+    const targetCode = ticketNum || manualTicketNumber;
+    if (!targetCode) {
+      setInjectError('Please select or specify a valid ticket number to inject.');
+      return;
+    }
+    setInjectLoading(true);
+    setInjectError('');
+    setInjectSuccess('');
+    try {
+      await adminInjectJackpotWinner(targetCode);
+      setInjectSuccess(`Successfully injected ticket ${targetCode} as the GRAND MGM JACKPOT WINNER! $10,000.00 prize has been instantly credited to the ticket holder's ledger.`);
+      setManualTicketNumber('');
+      setTimeout(() => setInjectSuccess(''), 8000);
+    } catch (err: any) {
+      setInjectError(err.message || 'An unexpected error occurred during manual jackpot injection.');
+    } finally {
+      setInjectLoading(false);
+    }
+  };
+
+  const handleAdminInjectTicket = async (targetUser: any) => {
+    try {
+      const ticketNum = await adminInjectJackpotTicket(targetUser.id);
+      alert(`🎉 Golden Jackpot Ticket [${ticketNum}] has been successfully injected and purchased for user @${targetUser.username}!`);
+    } catch (err: any) {
+      alert(`❌ Injection failed: ${err.message || 'Unknown error'}`);
+    }
+  };
 
   const selectHourSlots = (h: number, checked: boolean) => {
     const slotsInHour = Array.from({ length: 12 }, (_, i) => {
@@ -833,7 +868,8 @@ export const AdminPanel: React.FC = () => {
               { id: 'withdrawals', label: 'Withdraw Requests', count: pendingWithdrawals.length },
               { id: 'support', label: 'Message History', count: openTicketsCount },
               { id: 'process', label: 'Process System', count: 0 },
-              { id: 'referrals', label: 'Admin Referrals', count: 0 }
+              { id: 'referrals', label: 'Admin Referrals', count: 0 },
+              { id: 'jackpot', label: 'Jackpot Override', count: jackpotTickets.filter(t => t.status === 'pending').length }
             ].map(item => {
               const isActive = activeTab === item.id;
               return (
@@ -1200,6 +1236,13 @@ export const AdminPanel: React.FC = () => {
                                 className="px-2 py-1 bg-amber-500/15 border border-amber-500/30 text-amber-700 font-bold rounded text-[9px] hover:bg-amber-500/25"
                               >
                                 Game Control
+                              </button>
+
+                              <button
+                                onClick={() => handleAdminInjectTicket(user)}
+                                className="px-2 py-1 bg-yellow-100 border border-yellow-300 text-yellow-800 font-extrabold rounded text-[9px] hover:bg-yellow-200 cursor-pointer flex items-center gap-0.5"
+                              >
+                                🎫 Inject Ticket
                               </button>
 
                               <button
@@ -1589,19 +1632,9 @@ export const AdminPanel: React.FC = () => {
                 >
                   🔑 Administrator Passwords
                 </button>
-                <button
-                  onClick={() => setProcessSubTab('diagnostics')}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                    processSubTab === 'diagnostics' 
-                      ? 'bg-white shadow border border-slate-200/50 text-slate-900' 
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  🛠️ Vercel & Firebase Diagnostics
-                </button>
               </div>
 
-              {processSubTab === 'tuning' && (
+              {processSubTab === 'tuning' ? (
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
                   
                   <div className="border-b border-slate-100 pb-3">
@@ -1760,9 +1793,7 @@ export const AdminPanel: React.FC = () => {
 
                   </div>
                 </div>
-              )}
-
-              {processSubTab === 'credentials' && (
+              ) : (
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
                   
                   <div className="border-b border-slate-100 pb-3">
@@ -1851,309 +1882,6 @@ export const AdminPanel: React.FC = () => {
                       </div>
                     </div>
 
-                  </div>
-                </div>
-              )}
-
-              {processSubTab === 'diagnostics' && (
-                <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
-                  <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
-                    <div>
-                      <h3 className="text-lg font-black text-slate-900">🛠️ Vercel & Firebase Diagnostics Desk</h3>
-                      <p className="text-xs text-slate-500">Analyze environment variables, track real-time stream status, and run interactive ping tests to isolate Vercel deployment issues.</p>
-                    </div>
-                    <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full text-[10px] font-mono uppercase font-bold tracking-wider">
-                      Vercel Live Inspector
-                    </span>
-                  </div>
-
-                  {/* Top Status Indicators Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="p-4 bg-slate-50 border border-slate-150 rounded-2xl">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Vercel Environment</span>
-                      <span className="text-sm font-black text-slate-800 font-mono mt-1 block">
-                        {import.meta.env.PROD ? '🌐 Production' : '💻 Development'}
-                      </span>
-                    </div>
-                    <div className="p-4 bg-slate-50 border border-slate-150 rounded-2xl">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Vite Base URL</span>
-                      <span className="text-sm font-black text-slate-800 font-mono mt-1 block truncate" title={window.location.origin}>
-                        {window.location.origin}
-                      </span>
-                    </div>
-                    <div className="p-4 bg-slate-50 border border-slate-150 rounded-2xl">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Firebase Database ID</span>
-                      <span className="text-sm font-black text-indigo-600 font-mono mt-1 block">
-                        {firebaseConfig.firestoreDatabaseId || '(default)'}
-                      </span>
-                    </div>
-                    <div className="p-4 bg-slate-50 border border-slate-150 rounded-2xl">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Connected Active Streams</span>
-                      <span className="text-sm font-black text-emerald-600 mt-1 block">
-                        {([users, transactions, requests, bets, tickets, games, announcements].filter(arr => arr && arr.length > 0).length)} / 7 Healthy
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Banner indicator of overall Firestore Connection Test status */}
-                  {connectionStatus === 'idle' && (
-                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2.5 h-2.5 rounded-full bg-slate-400 animate-ping" />
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-700">Database Test Status: PENDING RUN</h4>
-                          <p className="text-[11px] text-slate-500">Run the connection diagnostics below to verify read permissions against your Firestore cluster.</p>
-                        </div>
-                      </div>
-                      <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold font-mono">
-                        Not Checked
-                      </span>
-                    </div>
-                  )}
-
-                  {connectionStatus === 'testing' && (
-                    <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-between animate-pulse">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-ping" />
-                        <div>
-                          <h4 className="text-xs font-bold text-indigo-800">Database Test Status: CONNECTING...</h4>
-                          <p className="text-[11px] text-indigo-600">Querying collection schemas and retrieving sample document payload...</p>
-                        </div>
-                      </div>
-                      <span className="px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-bold font-mono">
-                        Testing...
-                      </span>
-                    </div>
-                  )}
-
-                  {connectionStatus === 'success' && (
-                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">
-                          ✓
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-black text-emerald-800">Database Connection Status: PASSED (100% OPERATIONAL)</h4>
-                          <p className="text-[11px] text-emerald-600">Firestore is securely connected and authorized for client-side reads & database stream bindings.</p>
-                        </div>
-                      </div>
-                      <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold font-mono uppercase tracking-wider">
-                        PASS
-                      </span>
-                    </div>
-                  )}
-
-                  {connectionStatus === 'failure' && (
-                    <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center text-xs font-bold">
-                            ✕
-                          </div>
-                          <div>
-                            <h4 className="text-xs font-black text-rose-800">Database Connection Status: FAILED (ACTION REQUIRED)</h4>
-                            <p className="text-[11px] text-rose-600">Failed to establish active query with the Firestore database cluster. Refer to the debug log below.</p>
-                          </div>
-                        </div>
-                        <span className="px-2.5 py-1 bg-rose-100 text-rose-800 rounded-lg text-[10px] font-bold font-mono uppercase tracking-wider">
-                          FAIL
-                        </span>
-                      </div>
-                      {connectionError && (
-                        <div className="p-2.5 bg-rose-100/50 rounded-xl text-[10.5px] font-mono text-rose-700 select-all border border-rose-200/50">
-                          Error Details: {connectionError}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    {/* Left: Environment Variable & Config Check (7 cols) */}
-                    <div className="lg:col-span-7 space-y-6">
-                      <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
-                        <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                          <h4 className="text-xs font-bold uppercase text-slate-700 font-mono">Environment Variables & Config Mapping</h4>
-                          <span className="text-[10px] text-slate-400 font-mono">Evaluated at runtime</span>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left border-collapse text-[11px] font-mono">
-                            <thead>
-                              <tr className="border-b border-slate-200 text-slate-400 uppercase text-[9px] tracking-wider">
-                                <th className="pb-2 font-bold">Variable Name</th>
-                                <th className="pb-2 font-bold text-center">Status</th>
-                                <th className="pb-2 font-bold">Source Detail</th>
-                                <th className="pb-2 font-bold">Value Preview (Masked)</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 text-slate-700">
-                              {[
-                                { name: 'VITE_FIREBASE_API_KEY', value: import.meta.env.VITE_FIREBASE_API_KEY, isSecret: true, desc: 'API Key for Firebase Authentication & API' },
-                                { name: 'VITE_FIREBASE_AUTH_DOMAIN', value: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, isSecret: false, desc: 'Authentication Domain host' },
-                                { name: 'VITE_FIREBASE_PROJECT_ID', value: import.meta.env.VITE_FIREBASE_PROJECT_ID, isSecret: false, desc: 'Unique Google Cloud Project Identifier' },
-                                { name: 'VITE_FIREBASE_STORAGE_BUCKET', value: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET, isSecret: false, desc: 'Cloud Storage asset bucket path' },
-                                { name: 'VITE_FIREBASE_MESSAGING_SENDER_ID', value: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID, isSecret: true, desc: 'FCM push messages sender identifier' },
-                                { name: 'VITE_FIREBASE_APP_ID', value: import.meta.env.VITE_FIREBASE_APP_ID, isSecret: true, desc: 'Unique Client Application ID' },
-                                { name: 'VITE_FIREBASE_MEASUREMENT_ID', value: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID, isSecret: true, desc: 'Google Analytics property target ID' },
-                                { name: 'VITE_FIREBASE_DATABASE_ID', value: import.meta.env.VITE_FIREBASE_DATABASE_ID, isSecret: false, desc: 'Multi-database instance pointer' },
-                              ].map((v) => {
-                                const hasEnv = !!v.value;
-                                const isConfigFallback = !hasEnv && !!(firebaseConfig as any)[v.name.replace('VITE_FIREBASE_', '').replace(/_([a-z])/g, (g: any) => g[1].toUpperCase())];
-                                
-                                // Compute status state
-                                let badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
-                                let badgeText = '✕ FAIL';
-                                if (hasEnv) {
-                                  badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
-                                  badgeText = '✓ PASS';
-                                } else if (isConfigFallback) {
-                                  badgeColor = 'bg-amber-50 text-amber-700 border-amber-200';
-                                  badgeText = '⚠️ FALLBACK';
-                                }
-
-                                const actualVal = v.value || (firebaseConfig as any)[v.name.replace('VITE_FIREBASE_', '').replace(/_([a-z])/g, (g: any) => g[1].toUpperCase())];
-                                const displayValue = actualVal
-                                  ? (v.isSecret 
-                                      ? `${actualVal.slice(0, 6)}...${actualVal.slice(-4)}` 
-                                      : actualVal) 
-                                  : '(Not Set)';
-
-                                return (
-                                  <tr key={v.name} className="hover:bg-slate-100/50">
-                                    <td className="py-2.5 font-bold text-slate-800">
-                                      <span>{v.name}</span>
-                                      <p className="text-[9px] font-normal text-slate-400 font-sans mt-0.5">{v.desc}</p>
-                                    </td>
-                                    <td className="py-2.5 text-center">
-                                      <span className={`px-2 py-0.5 border rounded text-[9px] font-bold ${badgeColor}`}>
-                                        {badgeText}
-                                      </span>
-                                    </td>
-                                    <td className="py-2.5">
-                                      {hasEnv ? (
-                                        <span className="text-[10px] text-slate-500 font-semibold">Vercel Environment</span>
-                                      ) : isConfigFallback ? (
-                                        <span className="text-[10px] text-amber-600 font-semibold">JSON Applet Fallback</span>
-                                      ) : (
-                                        <span className="text-[10px] text-rose-600 font-semibold">Missing Configuration</span>
-                                      )}
-                                    </td>
-                                    <td className="py-2.5 text-slate-600 select-all font-semibold">
-                                      {displayValue}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-
-                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-[10.5px] text-amber-800 leading-normal font-mono">
-                          💡 <strong>Vercel Deployment tip:</strong> Ensure you define these variables inside your <strong>Vercel Dashboard → Settings → Environment Variables</strong>. All variables used in client-side code MUST be prefixed with <code className="bg-amber-100 px-1 rounded font-bold">VITE_</code>.
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Right: Real-time Connection Streams & Interactive Diagnostic Ping (5 cols) */}
-                    <div className="lg:col-span-5 space-y-6">
-                      {/* Active Connection Streams */}
-                      <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
-                        <h4 className="text-xs font-bold uppercase text-slate-700 font-mono border-b border-slate-200 pb-2">
-                          Active Connection Streams
-                        </h4>
-
-                        <div className="space-y-2.5 text-xs font-mono">
-                          {[
-                            { name: 'Users Collection Stream', count: users.length, status: users.length > 0 ? 'connected' : 'connecting_or_empty' },
-                            { name: 'Transactions Ledger Stream', count: transactions.length, status: transactions.length > 0 ? 'connected' : 'connecting_or_empty' },
-                            { name: 'Deposit/Cashout Requests', count: requests.length, status: requests.length > 0 ? 'connected' : 'connecting_or_empty' },
-                            { name: 'Gameplay Logs (Bets)', count: bets.length, status: bets.length > 0 ? 'connected' : 'connecting_or_empty' },
-                            { name: 'Support Messaging Channel', count: tickets.length, status: tickets.length > 0 ? 'connected' : 'connecting_or_empty' },
-                            { name: 'Game Registry Stream', count: games.length, status: games.length > 0 ? 'connected' : 'connecting_or_empty' },
-                            { name: 'Announcements Bulletin Stream', count: announcements.length, status: announcements.length > 0 ? 'connected' : 'connecting_or_empty' },
-                          ].map((stream) => (
-                            <div key={stream.name} className="flex justify-between items-center p-2.5 bg-white border border-slate-200 rounded-xl">
-                              <div>
-                                <span className="font-bold text-slate-800 block text-[10.5px]">{stream.name}</span>
-                                <span className="text-[9.5px] text-slate-400">{stream.count} documents synchronized</span>
-                              </div>
-                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                stream.status === 'connected' 
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                                  : 'bg-slate-100 text-slate-500 border border-slate-200 animate-pulse'
-                              }`}>
-                                {stream.status === 'connected' ? '● Online' : '● Idle'}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Interactive Diagnostic Ping test */}
-                      <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
-                        <h4 className="text-xs font-bold uppercase text-slate-700 font-mono border-b border-slate-200 pb-2">
-                          Interactive Integration Ping
-                        </h4>
-                        <p className="text-[11px] text-slate-500 font-mono">
-                          Click below to execute a real-time read connection query against your Firestore collection to verify Vercel key permissions.
-                        </p>
-
-                        <button
-                          onClick={async () => {
-                            const btn = document.getElementById('ping-test-btn');
-                            const output = document.getElementById('ping-test-output');
-                            if (!btn || !output) return;
-                            btn.innerText = 'PINGING...';
-                            btn.setAttribute('disabled', 'true');
-                            output.style.display = 'block';
-                            output.innerText = 'Initializing test connection query...\n';
-                            setConnectionStatus('testing');
-                            setConnectionError('');
-
-                            try {
-                              output.innerText += `Target Project ID: ${firebaseConfig.projectId || 'Not Configured'}\n`;
-                              output.innerText += `Database ID: ${firebaseConfig.firestoreDatabaseId || '(default)'}\n`;
-                              output.innerText += 'Executing collection query...\n';
-                              
-                              const testRef = collection(db, 'users');
-                              const q = query(testRef, limit(1));
-                              const snap = await getDocs(q);
-                              
-                              output.innerText += '✅ Connection Successful!\n';
-                              output.innerText += `Read status: Verified. Found ${snap.size} documents in "users".\n`;
-                              output.innerText += 'Your Vercel configuration & security rules are 100% stable and operational! 🎉';
-                              setConnectionStatus('success');
-                            } catch (err: any) {
-                              const errString = err?.message || String(err);
-                              output.innerText += '❌ CONNECTION FAILED!\n';
-                              output.innerText += `Error Code: ${err?.code || 'Unknown'}\n`;
-                              output.innerText += `Message: ${errString}\n\n`;
-                              output.innerText += 'Troubleshooting Checklists:\n';
-                              output.innerText += '1. Check if VITE_FIREBASE_API_KEY and VITE_FIREBASE_PROJECT_ID match your Firebase console.\n';
-                              output.innerText += '2. Check if your firestore.rules allows authenticated or target client reads.\n';
-                              output.innerText += '3. Verify if your VITE_FIREBASE_DATABASE_ID matches the targeted Firestore database ID.';
-                              setConnectionStatus('failure');
-                              setConnectionError(errString);
-                            } finally {
-                              btn.innerText = 'Run Connection Diagnostics';
-                              btn.removeAttribute('disabled');
-                            }
-                          }}
-                          id="ping-test-btn"
-                          className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-[11px] uppercase tracking-wide cursor-pointer font-mono transition-colors"
-                        >
-                          Run Connection Diagnostics
-                        </button>
-
-                        <pre 
-                          id="ping-test-output" 
-                          className="hidden p-3.5 bg-slate-900 text-emerald-400 border border-slate-800 rounded-xl text-[10px] font-mono leading-normal overflow-x-auto whitespace-pre-wrap max-h-[180px]"
-                        >
-                          Ready to test...
-                        </pre>
-                      </div>
-
-                    </div>
                   </div>
                 </div>
               )}
@@ -2416,6 +2144,182 @@ export const AdminPanel: React.FC = () => {
                   </div>
                 </div>
 
+              </div>
+            </div>
+          )}
+
+          {/* TAB 8: 👑 MGM GRAND JACKPOT OVERRIDE SYSTEM */}
+          {activeTab === 'jackpot' && (
+            <div className="space-y-6">
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+                <div className="border-b border-slate-100 pb-4">
+                  <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                    <span>👑</span> MGM Grand Lucky Jackpot Administration & Override Desk
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Manually inject the jackpot winner, override outcomes, and view all active golden tickets.
+                  </p>
+                </div>
+
+                {/* Overrides & Injection Panel */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* Manual Setting Desk */}
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4">
+                    <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider font-mono">
+                      🎯 Manual Winning Ticket Injection
+                    </h4>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Manually set the winning jackpot ticket number. Once injected, the ticket will be instantly marked as <strong>WON</strong>, all other active tickets will be marked as <strong>LOST</strong>, a grand prize of <strong>$10,000.00</strong> will be credited to the winner's wallet, and a platform-wide system notification will be broadcast.
+                    </p>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[9.5px] font-mono text-slate-400 uppercase font-black mb-1">
+                          Winning Ticket Number (6-Character Code)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. MGM-A38BC9"
+                          value={manualTicketNumber}
+                          onChange={(e) => setManualTicketNumber(e.target.value.toUpperCase().trim())}
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-white text-xs text-slate-900 focus:outline-none focus:border-emerald-500 font-mono tracking-wider"
+                        />
+                      </div>
+
+                      {injectError && (
+                        <div className="p-3 bg-rose-50 text-rose-650 rounded-xl text-xs flex items-center gap-1.5 font-bold border border-rose-100 animate-pulse">
+                          <span>❌ {injectError}</span>
+                        </div>
+                      )}
+
+                      {injectSuccess && (
+                        <div className="p-3 bg-emerald-50 text-emerald-650 rounded-xl text-xs flex items-center gap-1.5 font-black border border-emerald-100 font-sans">
+                          <span>✅ {injectSuccess}</span>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => handleInjectWinner(manualTicketNumber)}
+                        disabled={injectLoading || !manualTicketNumber}
+                        className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        {injectLoading ? 'Injecting Outcome...' : '🚀 Inject Jackpot Winning Number'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Rules & Statistics Summary */}
+                  <div className="bg-gradient-to-tr from-[#0b1120] to-[#1e293b] text-white p-6 rounded-2xl border border-slate-800 space-y-4">
+                    <span className="text-[10px] uppercase font-bold text-amber-400 font-mono tracking-wider block">Jackpot Core Parameters</span>
+                    
+                    <div className="space-y-3 font-sans text-xs">
+                      <div className="flex justify-between items-center py-2 border-b border-slate-800">
+                        <span className="text-slate-400">Total Purchased Tickets</span>
+                        <span className="font-mono font-bold text-white">{jackpotTickets.length}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-slate-800">
+                        <span className="text-slate-400">Pending Draw Tickets</span>
+                        <span className="font-mono font-bold text-amber-400">{jackpotTickets.filter(t => t.status === 'pending').length}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-slate-800">
+                        <span className="text-slate-400">Winning Pay-out Limit</span>
+                        <span className="font-mono font-bold text-emerald-400">$10,000.00</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2">
+                        <span className="text-slate-400">Total Ticket Revenue</span>
+                        <span className="font-mono font-bold text-indigo-400">${jackpotTickets.length * 100}</span>
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-slate-400 leading-relaxed font-mono pt-1">
+                      💡 SYSTEM OVERRIDE RULE: Once a jackpot is manually drawn, the pool resets. Admins are permitted to force any valid ticket code to win.
+                    </p>
+                  </div>
+
+                </div>
+
+                {/* Purchased Golden Tickets Ledger */}
+                <div className="space-y-4">
+                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider font-mono">
+                    🎫 Purchased Golden Tickets Ledger ({jackpotTickets.length})
+                  </h4>
+
+                  <div className="overflow-x-auto border border-slate-150 rounded-2xl">
+                    <table className="w-full text-left border-collapse text-xs text-slate-700">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-150 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                          <th className="py-3 px-4">Ticket Number</th>
+                          <th className="py-3 px-4">Player Portfolio</th>
+                          <th className="py-3 px-4">Purchase Date</th>
+                          <th className="py-3 px-4">Cost / Price</th>
+                          <th className="py-3 px-4">Draw Status</th>
+                          <th className="py-3 px-4 text-right">Settlement Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {jackpotTickets.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center text-slate-400 font-medium italic">
+                              No players have purchased any golden jackpot tickets yet in this round.
+                            </td>
+                          </tr>
+                        ) : (
+                          jackpotTickets.map((tkt, idx) => (
+                            <tr key={tkt.id || idx} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="py-3.5 px-4 font-mono font-black text-slate-900 tracking-wider">
+                                🎟️ {tkt.ticketNumber}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className="block font-black text-slate-900">@{tkt.username}</span>
+                                <span className="text-[9px] text-slate-400 font-mono">ID: {tkt.userId.slice(0, 8)}</span>
+                              </td>
+                              <td className="py-3.5 px-4 text-slate-500">
+                                {tkt.purchaseDate}
+                              </td>
+                              <td className="py-3.5 px-4 font-mono font-bold text-slate-700">
+                                ${tkt.price}.00
+                              </td>
+                              <td className="py-3.5 px-4">
+                                {tkt.status === 'pending' && (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[8px] font-mono font-black uppercase bg-amber-50 text-amber-600 border border-amber-200/40">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
+                                    PENDING
+                                  </span>
+                                )}
+                                {tkt.status === 'won' && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[8px] font-mono font-black uppercase bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                    🏆 WON $10,000
+                                  </span>
+                                )}
+                                {tkt.status === 'lost' && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[8px] font-mono font-medium uppercase bg-slate-100 text-slate-400 border border-slate-200/40">
+                                    LOST
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                {tkt.status === 'pending' ? (
+                                  <button
+                                    onClick={() => {
+                                      setManualTicketNumber(tkt.ticketNumber);
+                                      handleInjectWinner(tkt.ticketNumber);
+                                    }}
+                                    className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 hover:scale-105 active:scale-95 text-slate-950 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer shadow-xs animate-pulse"
+                                  >
+                                    👑 Inject as Winner
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 italic font-mono">Settled</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
           )}

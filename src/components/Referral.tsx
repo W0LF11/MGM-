@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePlatform } from '../context/PlatformContext';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../context/firebase';
+import { UserProfile } from '../types';
 import { 
   Users, 
   Share2, 
@@ -17,13 +20,67 @@ import {
 export const Referral: React.FC = () => {
   const { 
     currentUser, 
-    users, 
     claimReferralEarnings,
     transactions 
   } = usePlatform();
 
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [referredUsers, setReferredUsers] = useState<UserProfile[]>([]);
+
+  useEffect(() => {
+    if (!currentUser?.referralCode) return;
+
+    // Listen to users where referrerCode matches current user's unique referral code
+    const q1 = query(
+      collection(db, 'users'),
+      where('referrerCode', '==', currentUser.referralCode)
+    );
+
+    // Also listen to users where referredBy matches current user's ID to be backward-compatible with legacy and mock data
+    const q2 = query(
+      collection(db, 'users'),
+      where('referredBy', '==', currentUser.id)
+    );
+
+    let list1: UserProfile[] = [];
+    let list2: UserProfile[] = [];
+
+    const updateCombinedList = () => {
+      const mergedMap = new Map<string, UserProfile>();
+      list1.forEach(u => mergedMap.set(u.id, u));
+      list2.forEach(u => mergedMap.set(u.id, u));
+      setReferredUsers(Array.from(mergedMap.values()));
+    };
+
+    // Use includeMetadataChanges: true to handle real-time server synchronizations and bypass cache if needed
+    const unsub1 = onSnapshot(q1, { includeMetadataChanges: true }, (snapshot) => {
+      list1 = [];
+      snapshot.forEach((doc) => {
+        // Here, snapshot.metadata.fromCache can be inspected if we strictly want to flag cache vs server source.
+        // We push the real-time server updates directly to bypass stale cache behavior.
+        list1.push({ id: doc.id, ...doc.data() } as UserProfile);
+      });
+      updateCombinedList();
+    }, (error) => {
+      console.error("Error listening to referred users (referrerCode):", error);
+    });
+
+    const unsub2 = onSnapshot(q2, { includeMetadataChanges: true }, (snapshot) => {
+      list2 = [];
+      snapshot.forEach((doc) => {
+        list2.push({ id: doc.id, ...doc.data() } as UserProfile);
+      });
+      updateCombinedList();
+    }, (error) => {
+      console.error("Error listening to referred users (referredBy):", error);
+    });
+
+    return () => {
+      unsub1();
+      unsub2();
+    };
+  }, [currentUser?.id, currentUser?.referralCode]);
 
   if (!currentUser) {
     return (
@@ -35,7 +92,7 @@ export const Referral: React.FC = () => {
   }
 
   // Calculate dynamic referral stats for the logged-in user
-  const myReferredUsers = users.filter(u => u.referredBy === currentUser.id);
+  const myReferredUsers = referredUsers;
   const totalReferred = myReferredUsers.length;
   
   // Sum up referral earnings from transactions
@@ -43,8 +100,11 @@ export const Referral: React.FC = () => {
     .filter(t => t.userId === currentUser.id && t.type === 'referral' && t.status === 'completed')
     .reduce((sum, t) => sum + t.amount, 0);
 
-  // Dynamic calculations: $25 bonus reward per successful partner registration
-  const accumulatedBalance = totalReferred * 25.0;
+  // Dynamic calculations: $25 bonus reward per successful partner registration + 5% betting volume commission
+  const totalWageredByFriends = myReferredUsers.reduce((sum, u) => sum + (u.totalWagered || 0), 0);
+  const registrationBonus = totalReferred * 25.0;
+  const wageringCommission = totalWageredByFriends * 0.05;
+  const accumulatedBalance = registrationBonus + wageringCommission;
   const readyToCollect = Math.max(0, accumulatedBalance - myReferralEarnings);
 
   // Generate Referral Link
@@ -239,13 +299,17 @@ export const Referral: React.FC = () => {
 
                   <div className="flex gap-4 items-center">
                     <div className="text-right">
+                      <p className="text-[10px] text-slate-400 font-mono">Wagered Volume</p>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300 font-mono">${(ru.totalWagered || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="text-right">
                       <p className="text-[10px] text-slate-400 font-mono">Commission Yield</p>
-                      <span className="font-bold text-emerald-500 font-mono">$25.00</span>
+                      <span className="font-bold text-emerald-500 font-mono">${(25.00 + (ru.totalWagered || 0) * 0.05).toFixed(2)}</span>
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] text-slate-400 font-mono">Status</p>
-                      <span className="inline-flex items-center gap-1 text-emerald-500 font-bold text-[10px] uppercase">
-                        Active
+                      <span className={`inline-flex items-center gap-1 font-bold text-[10px] uppercase ${ru.status === 'active' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {ru.status || 'Active'}
                       </span>
                     </div>
                   </div>

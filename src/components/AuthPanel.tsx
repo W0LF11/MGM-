@@ -19,14 +19,22 @@ export const AuthPanel: React.FC = () => {
   const [referralCode, setReferralCode] = useState('');
   const [adminCode, setAdminCode] = useState('');
 
-  // Auto-capture referral code from URL parameters
+  // Auto-capture referral code from URL parameters and persist to prevent silent link breakage
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const ref = params.get('ref');
-      if (ref) {
-        setReferralCode(ref.toUpperCase().trim());
+      if (ref && ref !== 'undefined' && ref !== 'null' && ref.trim() !== '') {
+        const cleanedRef = ref.toUpperCase().trim();
+        setReferralCode(cleanedRef);
+        localStorage.setItem('pending_referral_code', cleanedRef);
         setIsSignUp(true);
+      } else {
+        // Retrieve persisted referral code if url param is lost on refresh or navigation
+        const storedRef = localStorage.getItem('pending_referral_code');
+        if (storedRef && storedRef !== 'undefined' && storedRef !== 'null' && storedRef.trim() !== '') {
+          setReferralCode(storedRef.toUpperCase().trim());
+        }
       }
     } catch (e) {
       console.error('Error parsing referral URL search param:', e);

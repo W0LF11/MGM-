@@ -34,7 +34,8 @@ import {
   Achievement,
   SupportMessage,
   BankAccount,
-  DiceSchedule
+  DiceSchedule,
+  JackpotTicket
 } from '../types';
 
 interface PlatformContextType {
@@ -105,6 +106,12 @@ interface PlatformContextType {
   adminUpdateFAQ: (faqs: FAQItem[]) => void;
   adminSimulateTraffic: () => void;
   adminSendNotification: (userId: string, title: string, message: string) => Promise<void>;
+  adminInjectJackpotWinner: (ticketNumber: string) => Promise<void>;
+  adminInjectJackpotTicket: (userId: string) => Promise<string>;
+  
+  // Jackpot State & Actions
+  jackpotTickets: JackpotTicket[];
+  buyJackpotTicket: () => Promise<void>;
   
   // Role toggler
   setRole: (role: 'user' | 'admin' | 'support' | 'super_admin') => void;
@@ -181,8 +188,10 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [currentRole, setRoleState] = useState<'user' | 'admin' | 'support' | 'super_admin'>('user');
   const [loginSessions, setLoginSessions] = useState<LoginSession[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [jackpotTickets, setJackpotTickets] = useState<JackpotTicket[]>([]);
 
   const pendingRepliesRef = useRef<Set<string>>(new Set());
+  const isRegisteringRef = useRef<boolean>(false);
 
   // Merge requests and clearedTransactions for UI backwards-compatibility
   const transactions: Transaction[] = React.useMemo(() => {
@@ -374,6 +383,11 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               setCurrentUser(data);
               setRoleState(data.role || 'user');
             } else {
+              // If the user is currently registering via register(), skip writing the default profile to avoid a race condition.
+              if (isRegisteringRef.current) {
+                console.log('[onAuthStateChanged] Registration in progress, skipping default profile generation.');
+                return;
+              }
               // Document does not exist yet (e.g. registered in auth but db write failed or delayed)
               const emailLower = authUser.email?.toLowerCase() || '';
               const isAdminEmail = emailLower === 'wolfsingh1110@gmail.com' || emailLower === 'vishalpal@gmail.com' || emailLower === 'admin@luckyplatform.com';
@@ -459,6 +473,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     let unsubReferredUsers: (() => void) | undefined;
     let unsubAllBets: () => void;
     let unsubNotifications: () => void;
+    let unsubJackpot: () => void;
 
     if (role === 'admin' || role === 'support' || role === 'super_admin') {
       // Executive Admin & Support can listen to ALL tickets, transactions, requests, and users
@@ -514,6 +529,14 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setNotifications(list);
       }, (error) => {
         handleFirestoreError(error, OperationType.GET, 'notifications');
+      });
+
+      unsubJackpot = onSnapshot(collection(db, 'jackpot_tickets'), (snap) => {
+        const list: JackpotTicket[] = [];
+        snap.forEach(d => list.push(d.data() as JackpotTicket));
+        setJackpotTickets(list);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, 'jackpot_tickets');
       });
     } else {
       // Standard players can ONLY query their own documents
@@ -596,6 +619,18 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           handleFirestoreError(error, OperationType.GET, 'referred_users');
         }
       );
+
+      unsubJackpot = onSnapshot(
+        query(collection(db, 'jackpot_tickets'), where('userId', '==', uid)),
+        (snap) => {
+          const list: JackpotTicket[] = [];
+          snap.forEach(d => list.push(d.data() as JackpotTicket));
+          setJackpotTickets(list);
+        },
+        (error) => {
+          handleFirestoreError(error, OperationType.GET, 'jackpot_tickets');
+        }
+      );
     }
 
     return () => {
@@ -606,6 +641,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       unsubRequests();
       unsubAllBets();
       unsubNotifications();
+      unsubJackpot();
       if (unsubAllUsers) unsubAllUsers();
       if (unsubReferredUsers) unsubReferredUsers();
     };
@@ -723,17 +759,39 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const register = async (username: string, email: string, phone: string, password?: string, referralCode?: string, adminCode?: string): Promise<boolean> => {
     try {
+      isRegisteringRef.current = true;
       const derivedPass = password || getDerivedPassword(email);
       const cred = await createUserWithEmailAndPassword(auth, email.toLowerCase(), derivedPass);
       
       let referrerId: string | undefined;
-      if (referralCode) {
+      let referrerCodeVal: string | undefined;
+      if (referralCode && referralCode !== 'undefined' && referralCode !== 'null' && referralCode.trim() !== '') {
         try {
           const usersRef = collection(db, 'users');
-          const q = query(usersRef, where('referralCode', '==', referralCode.toUpperCase().trim()));
-          const querySnapshot = await getDocs(q);
-          if (!querySnapshot.empty) {
-            referrerId = querySnapshot.docs[0].id;
+          const cleanCode = referralCode.toUpperCase().trim();
+          const cleanCodeLower = referralCode.toLowerCase().trim();
+          
+          // 1. Try finding by uppercase referralCode (standard generated codes are uppercase)
+          const qCode = query(usersRef, where('referralCode', '==', cleanCode));
+          const snapCode = await getDocs(qCode);
+          if (!snapCode.empty) {
+            referrerId = snapCode.docs[0].id;
+            referrerCodeVal = snapCode.docs[0].data().referralCode;
+          } else {
+            // 2. Try finding by case-insensitive username matching (exact, uppercase, and lowercase)
+            const qName = query(usersRef, where('username', '==', referralCode.trim()));
+            const snapName = await getDocs(qName);
+            if (!snapName.empty) {
+              referrerId = snapName.docs[0].id;
+              referrerCodeVal = snapName.docs[0].data().referralCode;
+            } else {
+              const qNameLower = query(usersRef, where('username', '==', cleanCodeLower));
+              const snapNameLower = await getDocs(qNameLower);
+              if (!snapNameLower.empty) {
+                referrerId = snapNameLower.docs[0].id;
+                referrerCodeVal = snapNameLower.docs[0].data().referralCode;
+              }
+            }
           }
         } catch (e) {
           console.error('Error querying referrer:', e);
@@ -755,13 +813,14 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         balance: (determinedRole === 'admin' || determinedRole === 'super_admin') ? 0.0 : 10.0, // Sign up bonus cash
         bonusBalance: (determinedRole === 'admin' || determinedRole === 'super_admin') ? 0.0 : 50.0, // Sign up bonus credit
         referralCode: username.toUpperCase().slice(0, 5) + Math.floor(Math.random() * 90 + 10),
-        referredBy: referrerId,
         isEmailVerified: false,
         isMobileVerified: false,
         createdAt: formatDate(),
         role: determinedRole,
         password: password || getDerivedPassword(email),
-        ...((adminCode === 'MGM_ADMIN_SECRET_KEY_2026' || adminCode === 'MGM_SUPER_ADMIN_SECRET_KEY_2026') ? { adminCode } : {})
+        ...((adminCode === 'MGM_ADMIN_SECRET_KEY_2026' || adminCode === 'MGM_SUPER_ADMIN_SECRET_KEY_2026') ? { adminCode } : {}),
+        ...(referrerId ? { referredBy: referrerId } : {}),
+        ...(referrerCodeVal ? { referrerCode: referrerCodeVal } : {})
       };
 
       await setDoc(doc(db, 'users', cred.user.uid), newUser);
@@ -771,6 +830,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (err) {
       console.error('Firebase registration failed:', err);
       throw err;
+    } finally {
+      isRegisteringRef.current = false;
     }
   };
 
@@ -1007,7 +1068,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         let curBal = uData.balance;
         let curBonus = uData.bonusBalance;
-        let balanceUsed: 'real' | 'bonus' = 'real';
+        let balanceUsed: 'real' | 'bonus' | 'mixed' = 'real';
 
         if (curBal >= betAmount) {
           curBal -= betAmount;
@@ -1015,12 +1076,17 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         } else if (curBonus >= betAmount) {
           curBonus -= betAmount;
           balanceUsed = 'bonus';
+        } else if (curBal + curBonus >= betAmount) {
+          const remainderNeeded = betAmount - curBonus;
+          curBonus = 0;
+          curBal -= remainderNeeded;
+          balanceUsed = 'mixed';
         } else {
           throw new Error('Insufficient wallet funds!');
         }
 
         if (winAmount > 0) {
-          if (balanceUsed === 'real') {
+          if (balanceUsed === 'real' || balanceUsed === 'mixed') {
             curBal += winAmount;
           } else {
             curBonus += winAmount;
@@ -1050,12 +1116,13 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           status: 'completed',
           reference: `STK_${betId.slice(4)}`,
           date: formatDate(),
-          description: `Wagered stake on ${gData.name} (${balanceUsed === 'real' ? 'Real Balance' : 'Bonus Balance'})`
+          description: `Wagered stake on ${gData.name} (${balanceUsed === 'real' ? 'Real Balance' : balanceUsed === 'bonus' ? 'Bonus Balance' : 'Mixed Balance'})`
         };
 
         tx.update(uRef, {
           balance: parseFloat(curBal.toFixed(2)),
-          bonusBalance: parseFloat(curBonus.toFixed(2))
+          bonusBalance: parseFloat(curBonus.toFixed(2)),
+          totalWagered: parseFloat(((uData.totalWagered || 0) + betAmount).toFixed(2))
         });
 
         tx.update(gameRef, {
@@ -1341,7 +1408,25 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const adminUpdateUserProfile = async (userId: string, updates: Partial<UserProfile>) => {
     try {
-      await updateDoc(doc(db, 'users', userId), updates);
+      const cleanUndefined = (obj: any): any => {
+        if (obj === null || obj === undefined) return obj;
+        if (Array.isArray(obj)) return obj.map(cleanUndefined);
+        if (typeof obj === 'object') {
+          const cleaned: any = {};
+          for (const key in obj) {
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
+              const val = obj[key];
+              if (val !== undefined) {
+                cleaned[key] = cleanUndefined(val);
+              }
+            }
+          }
+          return cleaned;
+        }
+        return obj;
+      };
+      const cleanedUpdates = cleanUndefined(updates);
+      await updateDoc(doc(db, 'users', userId), cleanedUpdates);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
     }
@@ -1453,6 +1538,184 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (err) {
       console.error('Error sending notification:', err);
     }
+  };
+
+  const buyJackpotTicket = async () => {
+    if (!currentUser) throw new Error('Authentication required to purchase a ticket.');
+    
+    const ticketPrice = 100;
+    if (currentUser.balance < ticketPrice) {
+      throw new Error('Insufficient wallet balance to buy a Jackpot Ticket! Please deposit funds to complete purchase.');
+    }
+
+    const ticketId = `TKT_${genId()}`;
+    const txId = `TX_${genId()}`;
+    
+    // Generate a beautiful uppercase alphanumeric ticket number (6 characters)
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Avoid confusing chars like I, O, 0, 1
+    let randomCode = '';
+    for (let i = 0; i < 6; i++) {
+      randomCode += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const ticketNumber = `MGM-${randomCode}`;
+
+    await runTransaction(db, async (tx) => {
+      const uRef = doc(db, 'users', currentUser.id);
+      const uSnap = await tx.get(uRef);
+      if (!uSnap.exists()) throw new Error('User profile not found.');
+      const uData = uSnap.data() as UserProfile;
+
+      if (uData.balance < ticketPrice) {
+        throw new Error('Insufficient wallet balance to buy a Jackpot Ticket! Please deposit funds to complete purchase.');
+      }
+
+      const newBalance = parseFloat((uData.balance - ticketPrice).toFixed(2));
+
+      // 1. Deduct balance
+      tx.update(uRef, { balance: newBalance });
+
+      // 2. Create Jackpot Ticket Doc
+      const ticketDocRef = doc(db, 'jackpot_tickets', ticketId);
+      tx.set(ticketDocRef, {
+        id: ticketId,
+        userId: currentUser.id,
+        username: currentUser.username,
+        ticketNumber,
+        price: ticketPrice,
+        purchaseDate: formatDate(),
+        status: 'pending'
+      });
+
+      // 3. Create Transaction Doc
+      const transactionDocRef = doc(db, 'transactions', txId);
+      tx.set(transactionDocRef, {
+        id: txId,
+        userId: currentUser.id,
+        username: currentUser.username,
+        type: 'jackpot_purchase',
+        amount: ticketPrice,
+        status: 'completed',
+        reference: ticketNumber,
+        date: formatDate(),
+        description: `MGM Lucky Jackpot Ticket Purchase (${ticketNumber})`
+      });
+    });
+  };
+
+  const adminInjectJackpotWinner = async (ticketNumber: string) => {
+    // 1. Query for the ticket with ticketNumber
+    const ticketsQuery = query(collection(db, 'jackpot_tickets'), where('ticketNumber', '==', ticketNumber));
+    const querySnap = await getDocs(ticketsQuery);
+    if (querySnap.empty) {
+      throw new Error(`Ticket with number ${ticketNumber} not found.`);
+    }
+
+    const ticketDoc = querySnap.docs[0];
+    const ticketData = ticketDoc.data() as JackpotTicket;
+    if (ticketData.status !== 'pending') {
+      throw new Error(`Ticket ${ticketNumber} has already been processed.`);
+    }
+
+    // Grand Jackpot Prize: $10,000
+    const jackpotPrize = 10000;
+    const winnerUserId = ticketData.userId;
+    const winnerUsername = ticketData.username;
+    
+    // We update this ticket to 'won' and all other pending tickets to 'lost'
+    const allTicketsSnap = await getDocs(collection(db, 'jackpot_tickets'));
+    
+    await runTransaction(db, async (tx) => {
+      // 1. Mark winning ticket as won
+      tx.update(doc(db, 'jackpot_tickets', ticketData.id), { status: 'won' });
+
+      // 2. Mark other pending tickets as lost
+      allTicketsSnap.forEach((docSnap) => {
+        const d = docSnap.data() as JackpotTicket;
+        if (d.id !== ticketData.id && d.status === 'pending') {
+          tx.update(doc(db, 'jackpot_tickets', d.id), { status: 'lost' });
+        }
+      });
+
+      // 3. Credit winner's balance
+      const uRef = doc(db, 'users', winnerUserId);
+      const uSnap = await tx.get(uRef);
+      if (uSnap.exists()) {
+        const uData = uSnap.data() as UserProfile;
+        const newBalance = parseFloat((uData.balance + jackpotPrize).toFixed(2));
+        tx.update(uRef, { balance: newBalance });
+      }
+
+      // 4. Create win transaction for winner
+      const winTxId = `TX_${genId()}`;
+      tx.set(doc(db, 'transactions', winTxId), {
+        id: winTxId,
+        userId: winnerUserId,
+        username: winnerUsername,
+        type: 'win',
+        amount: jackpotPrize,
+        status: 'completed',
+        reference: `JKP_${ticketNumber}`,
+        date: formatDate(),
+        description: `GRAND MGM JACKPOT WINNER! Ticket: ${ticketNumber}`
+      });
+
+      // 5. Create a global notification
+      const notifId = `NOTIF_${genId()}`;
+      tx.set(doc(db, 'notifications', notifId), {
+        id: notifId,
+        title: '👑 MGM GRAND JACKPOT WINNER ANNOUNCED! 👑',
+        message: `Congratulations to user @${winnerUsername}! Their ticket [${ticketNumber}] has won the Grand MGM Jackpot of $${jackpotPrize.toLocaleString()}! Next round is now active. Buy your tickets now!`,
+        isRead: false,
+        timestamp: new Date().toISOString(),
+        type: 'system',
+        byAdmin: true
+      });
+    });
+  };
+
+  const adminInjectJackpotTicket = async (userId: string): Promise<string> => {
+    const uRef = doc(db, 'users', userId);
+    const uSnap = await getDoc(uRef);
+    if (!uSnap.exists()) throw new Error('User profile not found in database.');
+    const uData = uSnap.data() as UserProfile;
+
+    const ticketId = `TKT_${genId()}`;
+    const txId = `TX_${genId()}`;
+    
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let randomCode = '';
+    for (let i = 0; i < 6; i++) {
+      randomCode += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const ticketNumber = `MGM-${randomCode}`;
+
+    await runTransaction(db, async (tx) => {
+      const ticketDocRef = doc(db, 'jackpot_tickets', ticketId);
+      tx.set(ticketDocRef, {
+        id: ticketId,
+        userId: uData.id,
+        username: uData.username,
+        ticketNumber,
+        price: 100,
+        purchaseDate: formatDate(),
+        status: 'pending'
+      });
+
+      const transactionDocRef = doc(db, 'transactions', txId);
+      tx.set(transactionDocRef, {
+        id: txId,
+        userId: uData.id,
+        username: uData.username,
+        type: 'jackpot_purchase',
+        amount: 100,
+        status: 'completed',
+        reference: ticketNumber,
+        date: formatDate(),
+        description: `MGM Lucky Jackpot Ticket Injected by Admin (${ticketNumber})`
+      });
+    });
+
+    return ticketNumber;
   };
 
   // ATOMIC Payouts Approval Gate
@@ -1816,6 +2079,10 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       adminUpdateFAQ,
       adminSimulateTraffic,
       adminSendNotification,
+      adminInjectJackpotWinner,
+      adminInjectJackpotTicket,
+      jackpotTickets,
+      buyJackpotTicket,
       setRole
     }}>
       {children}

@@ -10,11 +10,13 @@ export interface UserProfile {
   referralCode: string;
   password?: string;
   referredBy?: string;
+  referrerCode?: string;
   isEmailVerified: boolean;
   isMobileVerified: boolean;
   createdAt: string;
   role?: 'user' | 'admin' | 'support' | 'super_admin';
   creditScore?: number;
+  totalWagered?: number;
   adminCode?: string;
   taskProgress?: string;
   expectedCommission?: string;
@@ -70,7 +72,7 @@ export interface Transaction {
   id: string;
   userId: string;
   username: string;
-  type: 'deposit' | 'withdrawal' | 'bet' | 'win' | 'referral' | 'credit_adjustment';
+  type: 'deposit' | 'withdrawal' | 'bet' | 'win' | 'referral' | 'credit_adjustment' | 'jackpot_purchase';
   amount: number;
   status: 'pending' | 'completed' | 'rejected' | 'approved';
   reference: string;
@@ -201,4 +203,14 @@ export interface Achievement {
   maxProgress: number;
   unlocked: boolean;
   unlockedAt?: string;
+}
+
+export interface JackpotTicket {
+  id: string;
+  userId: string;
+  username: string;
+  ticketNumber: string;
+  price: number;
+  purchaseDate: string;
+  status: 'pending' | 'won' | 'lost';
 }

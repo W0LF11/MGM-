@@ -11,7 +11,11 @@ import {
   CreditCard,
   Building2,
   ListFilter,
-  AlertTriangle
+  AlertTriangle,
+  Coins,
+  Lock,
+  Gift,
+  Wallet as WalletIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -93,12 +97,6 @@ export const Wallet: React.FC = () => {
       };
       reader.readAsDataURL(file);
     }
-  };
-
-  const handleAutoFillReceipt = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setProofImage('https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=400&h=300&q=80');
-    setReceiptUploaded(true);
   };
 
   // Process Deposit Request Submission
@@ -219,39 +217,80 @@ export const Wallet: React.FC = () => {
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-8 space-y-12" id="wallet-viewport-container">
       
-      {/* 1. HERO BALANCE SECTION (Centered, high-contrast, modern Gen-Z typography) */}
-      <div className="text-center space-y-4 py-6 relative" id="aesthetic-balance-hero">
+      {/* 1. HERO BALANCE SECTION (Centered, high-contrast, modern Gen-Z typography with unified single balance) */}
+      <div className="space-y-6 py-6 relative" id="aesthetic-balance-hero">
         <div className="absolute inset-0 bg-radial-gradient from-emerald-500/10 to-transparent blur-3xl pointer-events-none -z-10" />
         
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-[10px] font-mono tracking-widest text-emerald-400 uppercase">
-          <ShieldCheck className="h-3.5 w-3.5" />
-          Secured Escrow Account
-        </div>
-        
-        <div className="space-y-1">
-          <p className="text-[11px] font-mono tracking-widest uppercase text-slate-400 font-bold">
-            Available Ledger Balance
-          </p>
-          <h1 className="text-5xl md:text-6xl font-sans font-black tracking-tighter text-emerald-400 select-none">
-            ${availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </h1>
+        <div className="text-center space-y-3">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-[10px] font-mono tracking-widest text-emerald-400 uppercase">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Secured Escrow Wallet
+          </div>
+          
+          <div className="space-y-1">
+            <p className="text-[11px] font-mono tracking-widest uppercase text-slate-400 font-bold">
+              Account Balance
+            </p>
+            <h1 className="text-5xl md:text-6xl font-sans font-black tracking-tighter text-emerald-400 select-none flex items-center justify-center gap-2">
+              ${(currentUser?.balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h1>
+            <p className="text-[10px] text-slate-500 font-mono">
+              Unified playable and withdrawal ledger balance
+            </p>
+          </div>
         </div>
 
-        <div className="flex justify-center items-center gap-6 text-[11px] text-slate-400 font-mono">
-          <div>
-            <span className="text-slate-600">Total Balance:</span> <span className="text-slate-300 font-bold">${(currentUser?.balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+        {/* Simplified Bento Grid Breakdown */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 max-w-3xl mx-auto">
+          
+          {/* Card 1: Total Balance */}
+          <div className="rounded-2xl bg-slate-950/80 border border-slate-850 p-4 space-y-2 flex flex-col justify-between">
+            <div className="flex justify-between items-center text-amber-400">
+              <span className="text-[10px] font-mono uppercase font-bold tracking-wider text-slate-400">Playable Balance</span>
+              <Coins className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-xl font-bold font-mono text-amber-400">
+                ${(currentUser?.balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <span className="text-[9px] text-slate-500 font-mono block mt-1">Available for all game wagers</span>
+            </div>
           </div>
-          <div className="h-3 w-px bg-slate-800" />
-          {pendingWithdrawalTotal > 0 && (
-            <>
-              <div>
-                <span className="text-rose-400 font-bold">Pending Lock:</span> <span className="text-rose-400 font-bold">-${pendingWithdrawalTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-              </div>
-              <div className="h-3 w-px bg-slate-800" />
-            </>
-          )}
+
+          {/* Card 2: Pending Locks */}
+          <div className="rounded-2xl bg-slate-950/80 border border-slate-850 p-4 space-y-2 flex flex-col justify-between">
+            <div className="flex justify-between items-center text-rose-400">
+              <span className="text-[10px] font-mono uppercase font-bold tracking-wider text-slate-400">Pending Locks</span>
+              <Lock className={`h-4 w-4 ${pendingWithdrawalTotal > 0 ? 'animate-pulse' : ''}`} />
+            </div>
+            <div>
+              <p className="text-xl font-bold font-mono text-rose-400">
+                ${pendingWithdrawalTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <span className="text-[9px] text-slate-500 font-mono block mt-1">Under verification hold</span>
+            </div>
+          </div>
+
+          {/* Card 3: Available for Withdrawal */}
+          <div className="rounded-2xl bg-slate-950/80 border border-slate-850 p-4 space-y-2 flex flex-col justify-between">
+            <div className="flex justify-between items-center text-emerald-400">
+              <span className="text-[10px] font-mono uppercase font-bold tracking-wider text-slate-400">Available to Withdraw</span>
+              <WalletIcon className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-xl font-bold font-mono text-emerald-400">
+                ${availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <span className="text-[9px] text-slate-500 font-mono block mt-1">Cleared balance for cashout</span>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Global Security / Trust Banner */}
+        <div className="flex justify-center items-center gap-6 text-[10px] text-slate-500 font-mono pt-2">
           <div>
-            <span className="text-slate-600">Rating:</span> <span className="text-emerald-400 font-bold">{currentUser?.creditScore || 95}/100</span>
+            <span className="text-slate-600">Trust Rating:</span> <span className="text-emerald-500 font-bold">{currentUser?.creditScore || 95}/100</span>
           </div>
         </div>
       </div>
@@ -461,20 +500,9 @@ export const Wallet: React.FC = () => {
 
                     {/* Unified Proof Image File Upload */}
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="block text-[10px] font-mono uppercase font-bold text-slate-400 tracking-wider">
-                          Payment Receipt Proof
-                        </label>
-                        {!receiptUploaded && (
-                          <button
-                            type="button"
-                            onClick={handleAutoFillReceipt}
-                            className="text-[10px] text-emerald-400 hover:text-emerald-300 font-mono font-bold uppercase transition-colors cursor-pointer"
-                          >
-                            [⚡ Auto-Fill Demo Receipt]
-                          </button>
-                        )}
-                      </div>
+                      <label className="block text-[10px] font-mono uppercase font-bold text-slate-400 tracking-wider">
+                        Payment Receipt Proof
+                      </label>
                       <input
                         type="file"
                         accept="image/*"
@@ -690,6 +718,58 @@ export const Wallet: React.FC = () => {
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
+      </div>
+
+      {/* Commercial Terms & Regulatory Conditions Section in Chinese (with MGM and VIP in English) */}
+      <div className="rounded-3xl bg-slate-950/90 border border-amber-500/20 p-8 space-y-6 shadow-2xl relative overflow-hidden" id="commercial-terms-regulatory">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-850">
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest font-black block">MGM 监管框架</span>
+            <h2 className="text-2xl md:text-3xl font-sans font-black text-slate-100 tracking-tight">
+              商业条款与监管规定
+            </h2>
+          </div>
+          <div className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-mono uppercase tracking-widest self-start md:self-auto">
+            官方指南
+          </div>
+        </div>
+
+        <p className="text-sm text-slate-300 leading-relaxed font-sans">
+          欢迎使用澳门美高梅（<span className="text-amber-400 font-bold">MGM</span>）高端博彩平台。在访问个人用户控制面板时，即视为您确认并同意遵守以下既定的安全商业准则：
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+          <div className="p-5 rounded-2xl bg-slate-900/30 border border-slate-850/60 space-y-3">
+            <h3 className="text-base font-bold text-amber-400 flex items-center gap-2">
+              <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-amber-500/10 text-[11px] font-mono font-black">1</span>
+              <span className="font-sans">VIP 权限与准入机制</span>
+            </h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              执行委员会保留最终决定权，可锁定系统游戏、重新设定 RTP（玩家回报率）指标，以及调整 <span className="text-amber-400 font-bold">VIP</span> 权限。受限 <span className="text-amber-400 font-bold">VIP</span> 系统需具备特定的账户准入资格。
+            </p>
+          </div>
+
+          <div className="p-5 rounded-2xl bg-slate-900/30 border border-slate-850/60 space-y-3">
+            <h3 className="text-base font-bold text-amber-400 flex items-center gap-2">
+              <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-amber-500/10 text-[11px] font-mono font-black">2</span>
+              <span className="font-sans">财务结算限额</span>
+            </h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              所有模拟存款、奖金及账面余额均严格绑定于当前本地工作区配置。账目数据每小时进行一次结算核查，且不涉及任何外部债务责任。
+            </p>
+          </div>
+        </div>
+
+        <div className="pt-4 border-t border-slate-850 flex gap-3">
+          <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 self-start text-amber-400">
+            <AlertTriangle className="h-4 w-4" />
+          </div>
+          <p className="text-[11px] text-slate-500 leading-relaxed font-mono">
+            法律声明：对上述安全准则的访问仅限于经身份验证的本地用户会话，以确保机密性规定不向公众披露。
+          </p>
         </div>
       </div>
 

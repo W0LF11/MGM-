@@ -131,22 +131,27 @@ service cloud.firestore {
            // Regular user
            (incoming().role == 'user' && 
             incoming().status == 'active' && 
-            (incoming().balance == 10 || incoming().balance == 0) && 
-            (incoming().bonusBalance == 50 || incoming().bonusBalance == 0)) ||
-           // Explicit pre-registered admins
+            (incoming().balance == 10 || incoming().balance == 10.0 || incoming().balance == 0 || incoming().balance == 0.0) && 
+            (incoming().bonusBalance == 50 || incoming().bonusBalance == 50.0 || incoming().bonusBalance == 0 || incoming().bonusBalance == 0.0)) ||
+           // Explicit pre-registered admins or superadmins based on email pattern or token
            ((incoming().role == 'admin' || incoming().role == 'super_admin') &&
             (('email' in request.auth.token && request.auth.token.email == 'wolfsingh1110@gmail.com') ||
              ('email' in request.auth.token && request.auth.token.email == 'vishalpal@gmail.com') ||
-             ('email' in request.auth.token && request.auth.token.email == 'admin@luckyplatform.com')) &&
+             ('email' in request.auth.token && request.auth.token.email == 'admin@luckyplatform.com') ||
+             incoming().email == 'wolfsingh1110@gmail.com' ||
+             incoming().email == 'vishalpal@gmail.com' ||
+             incoming().email == 'admin@luckyplatform.com' ||
+             incoming().email == 'superadmin@mgm.com' ||
+             incoming().email.startsWith('superadmin')) &&
             incoming().status == 'active' &&
-            (incoming().balance == 10 || incoming().balance == 0) && 
-            (incoming().bonusBalance == 50 || incoming().bonusBalance == 0)) ||
+            (incoming().balance == 10 || incoming().balance == 10.0 || incoming().balance == 0 || incoming().balance == 0.0) && 
+            (incoming().bonusBalance == 50 || incoming().bonusBalance == 50.0 || incoming().bonusBalance == 0 || incoming().bonusBalance == 0.0)) ||
            // Secret admin creation
            ((incoming().role == 'admin' || incoming().role == 'super_admin') &&
             (incoming().get('adminCode', '') == 'MGM_ADMIN_SECRET_KEY_2026' || incoming().get('adminCode', '') == 'MGM_SUPER_ADMIN_SECRET_KEY_2026') &&
             incoming().status == 'active' &&
-            incoming().balance == 0 &&
-            incoming().bonusBalance == 0)
+            (incoming().balance == 0 || incoming().balance == 0.0) &&
+            (incoming().bonusBalance == 0 || incoming().bonusBalance == 0.0))
          )) ||
         isAdmin()
       );
@@ -283,6 +288,25 @@ service cloud.firestore {
         ((resource == null || resource.data.userId == request.auth.uid) &&
          (request.resource == null || request.resource.data.userId == request.auth.uid))
       );
+    }
+
+    // COLLECTION: JACKPOT_TICKETS
+    match /jackpot_tickets/{ticketId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin() || isSupport());
+      allow list: if isSignedIn() && (isAdmin() || isSupport() || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && 
+                    isValidId(ticketId) && 
+                    incoming().userId == request.auth.uid && 
+                    incoming().price == 100 &&
+                    incoming().status == 'pending';
+      allow update: if isSignedIn() && (isAdmin() || isSupport());
+      allow delete: if isSignedIn() && (isAdmin() || isSupport());
+    }
+
+    // COLLECTION: JACKPOT_SETTINGS
+    match /jackpot_settings/{settingId} {
+      allow read: if true;
+      allow write: if isSignedIn() && isAdmin();
     }
 
   }

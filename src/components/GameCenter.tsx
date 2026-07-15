@@ -233,6 +233,9 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
   const perBetAmountRef = useRef(perBetAmount);
   const dicePeriodRef = useRef(dicePeriod);
   const lastDrawnPeriodRef = useRef<string>('');
+  const currentUserRef = useRef(currentUser);
+  const gamesRef = useRef(games);
+  const diceRollingRef = useRef(diceRolling);
 
   useEffect(() => {
     diceIsCommittedRef.current = diceIsCommitted;
@@ -249,6 +252,18 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
   useEffect(() => {
     dicePeriodRef.current = dicePeriod;
   }, [dicePeriod]);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  useEffect(() => {
+    gamesRef.current = games;
+  }, [games]);
+
+  useEffect(() => {
+    diceRollingRef.current = diceRolling;
+  }, [diceRolling]);
 
   // Dice Game Countdown Loop
   useEffect(() => {
@@ -294,8 +309,12 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
   }, [games, selectedGameId]);
 
   const triggerDiceDraw = () => {
-    if (diceRolling) return;
+    if (diceRollingRef.current) return;
     setDiceRolling(true);
+
+    const latestUser = currentUserRef.current;
+    const latestGames = gamesRef.current;
+    if (!latestUser) return;
 
     let d1 = Math.floor(Math.random() * 6) + 1;
     let d2 = Math.floor(Math.random() * 6) + 1;
@@ -304,7 +323,7 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
 
     // Check if there is an active time-based schedule (Always check current clock time slot for flawless admin manual control)
     const slot = getCurrentTimeSlot();
-    const currentDiceGame = games.find(g => g.id === 'dice');
+    const currentDiceGame = latestGames.find(g => g.id === 'dice');
     const activeSchedule = slot ? currentDiceGame?.diceSchedules?.find(s => s.timeSlot === slot) : null;
 
     // Let's determine what kind of rigging applies
@@ -312,18 +331,18 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
     let winPct = 50;
 
     const currentPeriod = getRealPeriod();
-    const userTargetSlot = currentUser?.nextDiceTimeSlot || 'any';
+    const userTargetSlot = latestUser?.nextDiceTimeSlot || 'any';
     let isUserOverrideActive = false;
 
-    const slotOverride = currentUser?.diceOverrides?.[currentPeriod];
+    const slotOverride = latestUser?.diceOverrides?.[currentPeriod];
 
     if (slotOverride && slotOverride.outcome !== 'random') {
       outputMode = slotOverride.outcome;
       isUserOverrideActive = true;
-    } else if (currentUser?.nextDiceResult && currentUser.nextDiceResult !== 'random') {
+    } else if (latestUser?.nextDiceResult && latestUser.nextDiceResult !== 'random') {
       if (userTargetSlot === 'any' || userTargetSlot === currentPeriod) {
         // User-specific rigging takes priority!
-        outputMode = currentUser.nextDiceResult;
+        outputMode = latestUser.nextDiceResult;
         isUserOverrideActive = true;
       }
     } else if (currentDiceGame?.manualResult && currentDiceGame.manualResult !== 'random') {
@@ -518,11 +537,11 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
       }
 
       // Consume/Reset Rigging on Firestore
-      if (currentUser?.nextDiceResult && currentUser.nextDiceResult !== 'random') {
-        const userTargetSlot = currentUser?.nextDiceTimeSlot || 'any';
+      if (latestUser?.nextDiceResult && latestUser.nextDiceResult !== 'random') {
+        const userTargetSlot = latestUser?.nextDiceTimeSlot || 'any';
         const curPeriod = getRealPeriod();
         if (userTargetSlot === 'any' || userTargetSlot === curPeriod) {
-          adminUpdateUserProfile(currentUser.id, { 
+          adminUpdateUserProfile(latestUser.id, { 
             nextDiceResult: 'random',
             nextDiceTimeSlot: 'any',
             nextDiceWinPercentage: null,
@@ -533,10 +552,10 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
 
       // Consume/Reset slotOverride on Firestore
       const curPeriod = getRealPeriod();
-      if (currentUser?.diceOverrides?.[curPeriod]) {
-        const updatedOverrides = { ...currentUser.diceOverrides };
+      if (latestUser?.diceOverrides?.[curPeriod]) {
+        const updatedOverrides = { ...latestUser.diceOverrides };
         delete updatedOverrides[curPeriod];
-        adminUpdateUserProfile(currentUser.id, {
+        adminUpdateUserProfile(latestUser.id, {
           diceOverrides: updatedOverrides
         }).catch(console.error);
       }
@@ -578,9 +597,9 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
 
         // Check if user override is active and override totalWin based on win/loss percentage!
         const cPeriod = getRealPeriod();
-        const activeSlotOverride = currentUser?.diceOverrides?.[cPeriod];
-        const uTargetSlot = currentUser?.nextDiceTimeSlot || 'any';
-        const isUserRiggingActive = currentUser?.nextDiceResult && currentUser.nextDiceResult !== 'random' && (uTargetSlot === 'any' || uTargetSlot === cPeriod);
+        const activeSlotOverride = latestUser?.diceOverrides?.[cPeriod];
+        const uTargetSlot = latestUser?.nextDiceTimeSlot || 'any';
+        const isUserRiggingActive = latestUser?.nextDiceResult && latestUser.nextDiceResult !== 'random' && (uTargetSlot === 'any' || uTargetSlot === cPeriod);
 
         if (activeSlotOverride && activeSlotOverride.outcome !== 'random') {
           if (activeSlotOverride.outcome === 'win') {
@@ -591,8 +610,8 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
             totalWin = totalWager * ((100 - pct) / 100);
           }
         } else if (isUserRiggingActive) {
-          const customWinPct = currentUser?.nextDiceWinPercentage;
-          const customLossPct = currentUser?.nextDiceLossPercentage;
+          const customWinPct = latestUser?.nextDiceWinPercentage;
+          const customLossPct = latestUser?.nextDiceLossPercentage;
 
           let actuallyWonAny = false;
           choices.forEach(choice => {
@@ -671,7 +690,7 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
     }
 
     const totalWager = diceSelectedChoices.length * perBetAmount;
-    const balance = currentUser.balance + currentUser.bonusBalance;
+    const balance = currentUser.balance;
     if (balance < totalWager) {
       alert("Insufficient wallet balance for this bet!");
       return;
@@ -872,7 +891,7 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
                   <Coins className="h-3.5 w-3.5 text-amber-400" />
                   <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">Balance:</span>
                   <span className="text-xs font-mono font-black text-amber-400">
-                    {showDiceBalance ? `$${((currentUser?.balance ?? 0) + (currentUser?.bonusBalance ?? 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$••••••'}
+                    {showDiceBalance ? `$${(currentUser?.balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$••••••'}
                   </span>
                 </div>
                 <button
@@ -2056,12 +2075,12 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
   const adjustBet = (multiplier: number) => {
     setBetAmount(prev => {
       const computed = parseFloat((prev * multiplier).toFixed(2));
-      return Math.max(1, Math.min(currentUser.balance + currentUser.bonusBalance, computed));
+      return Math.max(1, Math.min(currentUser.balance, computed));
     });
   };
 
   const setMaxBet = () => {
-    setBetAmount(parseFloat((currentUser.balance + currentUser.bonusBalance).toFixed(2)));
+    setBetAmount(parseFloat((currentUser.balance).toFixed(2)));
   };
 
   // --- GAME 1: DICE GAME (Real-time Period drawing handled inline) ---

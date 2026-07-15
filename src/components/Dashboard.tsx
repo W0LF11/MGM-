@@ -50,7 +50,9 @@ export const Dashboard: React.FC = () => {
     notifications,
     markAllNotificationsRead,
     currentRole,
-    setRole
+    setRole,
+    jackpotTickets,
+    buyJackpotTicket
   } = usePlatform();
 
   // Auth form states
@@ -68,6 +70,39 @@ export const Dashboard: React.FC = () => {
   const [editPhone, setEditPhone] = useState(currentUser?.phone || '');
   const [editAvatar, setEditAvatar] = useState(currentUser?.avatar || '🦁');
   const [profileSuccess, setProfileSuccess] = useState('');
+
+  // Jackpot purchase states
+  const [buyLoading, setBuyLoading] = useState(false);
+  const [buyError, setBuyError] = useState('');
+  const [buySuccess, setBuySuccess] = useState('');
+
+  // Synchronized Hourly Countdown & Live Draw Seeds
+  const [timeLeft, setTimeLeft] = useState({ mins: 45, secs: 30 });
+  const [activePlayerSeed, setActivePlayerSeed] = useState('SEED_MGM_77F9');
+
+  React.useEffect(() => {
+    const updateTimer = () => {
+      const now = new Date();
+      const minsLeft = 59 - now.getMinutes();
+      const secsLeft = 59 - now.getSeconds();
+      setTimeLeft({ mins: minsLeft, secs: secsLeft });
+    };
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  React.useEffect(() => {
+    const seeds = [
+      'SEED_MGM_482A', 'SEED_CRONOS_D91E', 'SEED_MGM_817F', 'SEED_ACTIVE_772C',
+      'SEED_PLAY_559B', 'SEED_WIN_203C', 'SEED_DICE_109D', 'SEED_LUCKY_882A'
+    ];
+    const interval = setInterval(() => {
+      const randomSeed = seeds[Math.floor(Math.random() * seeds.length)];
+      setActivePlayerSeed(randomSeed);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Profile synchronization effect to handle post-login state population
   React.useEffect(() => {
@@ -161,6 +196,21 @@ export const Dashboard: React.FC = () => {
     updateProfile(editUser, editPhone, editAvatar);
     setProfileSuccess('Profile successfully updated!');
     setTimeout(() => setProfileSuccess(''), 3000);
+  };
+
+  const handleBuyTicket = async () => {
+    setBuyError('');
+    setBuySuccess('');
+    setBuyLoading(true);
+    try {
+      await buyJackpotTicket();
+      setBuySuccess('MGM Jackpot Ticket purchased successfully! Your new ticket is recorded below.');
+      setTimeout(() => setBuySuccess(''), 5000);
+    } catch (err: any) {
+      setBuyError(err.message || 'An unexpected error occurred during ticket purchase.');
+    } finally {
+      setBuyLoading(false);
+    }
   };
 
   const handleSaveSecurity = (e: React.FormEvent) => {
@@ -518,6 +568,83 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* MGM 美高梅 EXECUTIVE PROMOTIONS & STRATEGIC SUGGESTIONS FEED */}
+      <div className="mb-8 space-y-4" id="mgm-promotions-desk">
+        <div className="flex items-center gap-2">
+          <span className="h-1 w-6 bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full" />
+          <h3 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-slate-200 font-mono">
+            MGM Premium Promotions & Winning Advisories
+          </h3>
+          <span className="px-2 py-0.5 rounded-full text-[8px] font-mono font-black bg-amber-500/15 text-amber-500 animate-pulse border border-amber-500/20">SPECIALS ACTIVE</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          
+          {/* Promo 1: Welcome match */}
+          <div className="bg-gradient-to-br from-amber-50/40 to-yellow-50/10 dark:from-amber-950/10 dark:to-slate-900/20 p-5 rounded-2xl border border-amber-100/60 dark:border-amber-900/10 relative overflow-hidden flex flex-col justify-between space-y-3 shadow-xs">
+            <div className="space-y-1.5 relative z-10">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs">🎁</span>
+                <span className="text-[10px] font-mono font-black uppercase tracking-wider text-amber-600 dark:text-amber-450">DEPOSIT PROMOTION</span>
+              </div>
+              <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 tracking-wide uppercase">
+                150% First Deposit Matching Bonus
+              </h4>
+              <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-relaxed font-mono">
+                Initiate your first ledger deposit of ₹5,000 / $100 or higher and receive a 150% match instantly credited to your game ledger.
+              </p>
+            </div>
+            <div className="text-[9px] font-mono text-amber-600 dark:text-amber-500 font-bold">
+              Code: MGM150MATCH • Real-Time Ingress
+            </div>
+          </div>
+
+          {/* Promo 2: Referral Scheme */}
+          <div className="bg-gradient-to-br from-indigo-50/40 to-slate-50/10 dark:from-indigo-950/10 dark:to-slate-900/20 p-5 rounded-2xl border border-indigo-100/60 dark:border-indigo-900/10 relative overflow-hidden flex flex-col justify-between space-y-3 shadow-xs">
+            <div className="space-y-1.5 relative z-10">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs">🔗</span>
+                <span className="text-[10px] font-mono font-black uppercase tracking-wider text-indigo-500 dark:text-indigo-400">REFERRAL SYSTEM</span>
+              </div>
+              <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 tracking-wide uppercase">
+                MGM Elite Invite & Referral Network
+              </h4>
+              <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-relaxed font-mono">
+                Refer other high-stake players to the platform. Instantly capture <strong>10% commission dividends</strong> on every single bet execution they complete, fully cleared to withdraw.
+              </p>
+            </div>
+            <div className="text-[9px] font-mono text-indigo-500 dark:text-indigo-400 font-bold">
+              Dividends Settled Instantly • Infinite Slots
+            </div>
+          </div>
+
+          {/* Promo 3: Dynamic Winning Suggestions */}
+          <div className="bg-gradient-to-br from-emerald-50/40 to-teal-50/10 dark:from-emerald-950/10 dark:to-slate-900/20 p-5 rounded-2xl border border-emerald-100/60 dark:border-emerald-900/10 relative overflow-hidden flex flex-col justify-between space-y-3 shadow-xs md:col-span-2 lg:col-span-1">
+            <div className="space-y-1.5 relative z-10">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs">🎯</span>
+                <span className="text-[10px] font-mono font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">WIN STRATEGY</span>
+              </div>
+              <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 tracking-wide uppercase">
+                Board-Calibrated Winning Suggestions
+              </h4>
+              <div className="space-y-1 text-[10px] text-slate-500 dark:text-slate-400 font-mono leading-relaxed list-disc">
+                <p className="flex items-start gap-1">
+                  <span>•</span> <span><strong>Dice Over/Under:</strong> Set risk to <strong>Under 85</strong> for an incredibly stable 85% victory index rate.</span>
+                </p>
+                <p className="flex items-start gap-1">
+                  <span>•</span> <span><strong>Jackpot Golden Turn:</strong> Buy 2+ tickets in active rounds to mathematically double your injection success probabilities.</span>
+                </p>
+              </div>
+            </div>
+            <div className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+              Real-Time Suggested RTP: 97.4% • Verified
+            </div>
+          </div>
+
+        </div>
+      </div>
+
       {/* Main Grid: Wallet & Bank left, Suggestions & Games right */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
@@ -669,6 +796,165 @@ export const Dashboard: React.FC = () => {
         {/* RIGHT COMPONENT: GAMING ANALYTICS */}
         <div className="lg:col-span-5 space-y-8">
 
+          {/* MGM GRAND LUCKY JACKPOT SYSTEM */}
+          <div className="rounded-3xl bg-white dark:bg-slate-900/20 p-6 space-y-5 border border-slate-100 dark:border-slate-800/80 shadow-md relative overflow-hidden" id="user-jackpot-terminal">
+            <div className="absolute -right-8 -top-8 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+            
+            <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <span className="p-2.5 bg-amber-50 dark:bg-amber-950/20 text-amber-500 rounded-xl border border-amber-100/30 dark:border-amber-900/20 animate-pulse">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-850 dark:text-slate-100 font-sans">MGM 美高梅 LUCKY JACKPOT</h3>
+                <p className="text-[10px] text-slate-400 font-mono">Buy tickets & hit the grand payout</p>
+              </div>
+            </div>
+
+            {/* Jackpot Prize Pool Box */}
+            <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 rounded-2xl p-5 text-white border border-slate-850 relative overflow-hidden shadow-lg">
+              <div className="absolute right-0 bottom-0 w-24 h-24 bg-amber-500/10 rounded-full blur-xl pointer-events-none" />
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[9px] font-mono tracking-widest text-amber-400 font-black uppercase">GRAND PRIZE POOL</span>
+                <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 text-[8px] font-bold tracking-wider border border-amber-500/20">LIVE</span>
+              </div>
+              <div className="text-3xl font-black font-mono tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-200 to-amber-300">
+                $10,000.00
+              </div>
+              <p className="text-[10px] text-slate-400 font-mono mt-2 leading-relaxed">
+                Tickets are valued at <strong className="text-amber-500">$100.00</strong> each. Payout is instantly settled upon jackpot result injection.
+              </p>
+            </div>
+
+            {/* LIVE DRAW SYSTEM & TIMER */}
+            <div className="bg-slate-50 dark:bg-slate-900/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[9px] font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
+                  LIVE DRAW SYSTEM
+                </span>
+                <span className="text-[9.5px] font-mono text-indigo-600 dark:text-indigo-400 font-extrabold flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/30 px-2 py-0.5 rounded-lg border border-indigo-100 dark:border-indigo-900/10">
+                  CRONOS LEDGER
+                </span>
+              </div>
+
+              {/* Countdown & Multiplier Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white dark:bg-slate-950/60 p-3 rounded-xl border border-slate-150/45 dark:border-slate-800/40">
+                  <span className="text-[8.5px] font-bold text-slate-400 block uppercase font-mono">Draw Countdown</span>
+                  <span className="text-lg font-black font-mono text-slate-800 dark:text-white tracking-wider">
+                    {String(timeLeft.mins).padStart(2, '0')}:{String(timeLeft.secs).padStart(2, '0')}
+                  </span>
+                  <span className="text-[8.5px] text-slate-400 block mt-0.5">Resets Hourly</span>
+                </div>
+
+                <div className="bg-white dark:bg-slate-950/60 p-3 rounded-xl border border-slate-150/45 dark:border-slate-800/40">
+                  <span className="text-[8.5px] font-bold text-slate-400 block uppercase font-mono">Your Win Rate</span>
+                  <span className="text-lg font-black font-mono text-amber-500 tracking-wider">
+                    {(1.0 + Math.min(4.0, (bets?.length ?? 0) * 0.2)).toFixed(1)}x
+                  </span>
+                  <span className="text-[8.5px] text-slate-400 block mt-0.5">Dice/Spin Multiplier</span>
+                </div>
+              </div>
+
+              {/* Seed status */}
+              <div className="flex justify-between items-center text-[10px] bg-white dark:bg-slate-950/40 p-2 rounded-xl border border-slate-100 dark:border-slate-800/30">
+                <span className="font-mono text-slate-400">Ledger Player Seed:</span>
+                <span className="font-mono font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  {activePlayerSeed}
+                </span>
+              </div>
+
+              <p className="text-[9.5px] text-slate-450 dark:text-slate-505 leading-relaxed text-center italic">
+                "Keep spinning dice, matching colors, or scratching tickets to multiply your win rate!"
+              </p>
+            </div>
+
+            {/* Feedback Displays */}
+            {buyError && (
+              <div className="p-3.5 bg-rose-50 dark:bg-rose-950/20 text-rose-500 rounded-xl text-xs flex items-center gap-2 border border-rose-100 dark:border-rose-900/30 font-semibold animate-shake">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{buyError}</span>
+              </div>
+            )}
+
+            {buySuccess && (
+              <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-500 rounded-xl text-xs flex items-center gap-2 border border-emerald-100 dark:border-emerald-900/30 font-bold animate-pulse">
+                <CheckCircle className="h-4 w-4 shrink-0" />
+                <span>{buySuccess}</span>
+              </div>
+            )}
+
+            {/* Buy Action Button */}
+            <button
+              onClick={handleBuyTicket}
+              disabled={buyLoading || (currentUser?.balance ?? 0) < 100}
+              className="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 disabled:from-slate-100 disabled:to-slate-150 disabled:dark:from-slate-900 disabled:dark:to-slate-900 disabled:text-slate-400 dark:disabled:text-slate-600 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-[0.98] disabled:scale-100 cursor-pointer flex items-center justify-center gap-2"
+            >
+              {buyLoading ? (
+                <>
+                  <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-slate-950 border-t-transparent" />
+                  SECURING GOLDEN TICKET...
+                </>
+              ) : (
+                <>
+                  🎫 PURCHASE JACKPOT TICKET ($100.00)
+                </>
+              )}
+            </button>
+
+            {/* Purchased Tickets List */}
+            <div className="space-y-2.5 pt-1">
+              <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 uppercase tracking-wider font-bold">
+                <span>Your Purchased Tickets</span>
+                <span>({jackpotTickets.length})</span>
+              </div>
+
+              {jackpotTickets.length === 0 ? (
+                <div className="text-center py-6 bg-slate-50 dark:bg-slate-900/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                  <p className="text-xs text-slate-400 dark:text-slate-500 italic">
+                    No jackpot tickets purchased yet. Securing one now might be your golden turn!
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {jackpotTickets.map((tkt) => (
+                    <div 
+                      key={tkt.id}
+                      className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-150/50 dark:border-slate-800 transition-all hover:bg-slate-100 dark:hover:bg-slate-800/40"
+                    >
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-black font-mono text-slate-850 dark:text-white flex items-center gap-1.5">
+                          <span className="text-[10px]">🎟️</span> {tkt.ticketNumber}
+                        </span>
+                        <span className="text-[8px] font-mono text-slate-400 block">Bought: {tkt.purchaseDate}</span>
+                      </div>
+
+                      <div>
+                        {tkt.status === 'pending' && (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[8px] font-mono font-black uppercase bg-amber-50/80 text-amber-600 dark:bg-amber-950/20 dark:text-amber-450 border border-amber-200/40 dark:border-amber-900/20">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
+                            PENDING DRAW
+                          </span>
+                        )}
+                        {tkt.status === 'won' && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[8px] font-mono font-black uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 animate-bounce">
+                            🏆 WON $10,000
+                          </span>
+                        )}
+                        {tkt.status === 'lost' && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[8px] font-mono font-bold uppercase bg-slate-100 text-slate-400 dark:bg-slate-900 dark:text-slate-500 border border-slate-200/40 dark:border-slate-800">
+                            NO MATCH
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* REAL-TIME GAMING ANALYTICS */}
           <div className="rounded-3xl bg-white dark:bg-slate-900/20 p-6 space-y-4 border border-slate-100 dark:border-slate-800/80 shadow-md" id="user-gaming-analytics">
             <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -794,51 +1080,29 @@ export const Dashboard: React.FC = () => {
                 <span className="p-1.5 bg-amber-50 dark:bg-amber-950/30 rounded-lg text-amber-500">
                   <Shield className="h-4 w-4" />
                 </span>
-                <h3 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide animate-pulse">
-                  商業條款與合規監管條件
+                <h3 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">
+                  商业条款与监管规定
                 </h3>
               </div>
 
               {/* Modal Body */}
-              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-3 leading-relaxed font-mono max-h-[300px] overflow-y-auto pr-1">
-                <p className="text-slate-700 dark:text-slate-300">
-                  歡迎來到 <strong className="text-slate-900 dark:text-white">MGM 澳門美高梅尊尚娛樂平台</strong>。登錄並訪問您的個人用戶控制面板，即表示您確認並同意遵守以下聲明的安全商業框架：
+              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-3 leading-relaxed font-sans max-h-[300px] overflow-y-auto pr-1">
+                <p>
+                  欢迎使用澳门美高梅（<strong className="text-slate-800 dark:text-white">MGM</strong>）高端博彩平台。在访问个人用户控制面板时，即视为您确认并同意遵守以下既定的安全商业准则：
                 </p>
-                
                 <div className="space-y-3 pt-2">
                   <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-150/40 dark:border-slate-850">
-                    <span className="font-extrabold text-amber-600 dark:text-amber-400 block text-[10px] uppercase mb-1">
-                      1. VIP 權限清除協議
-                    </span>
-                    <span className="text-slate-800 dark:text-slate-200 font-medium block">
-                      執行委員會保留鎖定系統遊戲、重新校準玩家返還率指數以及應用 VIP 權限的最終權力。受限制的 VIP 系統需要特定的賬戶許可。
-                    </span>
+                    <span className="font-extrabold text-slate-700 dark:text-slate-200 block text-[10px] uppercase mb-1">1. VIP 权限与准入机制</span>
+                    <span>执行委员会保留最终决定权，可锁定系统游戏、重新设定 RTP（玩家回报率）指标，以及调整 <strong className="text-amber-500 dark:text-amber-400">VIP</strong> 权限。受限 <strong className="text-amber-500 dark:text-amber-400">VIP</strong> 系统需具备特定的账户准入资格。</span>
                   </div>
-                  
                   <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-150/40 dark:border-slate-850">
-                    <span className="font-extrabold text-amber-600 dark:text-amber-400 block text-[10px] uppercase mb-1">
-                      2. 財務結算限額
-                    </span>
-                    <span className="text-slate-800 dark:text-slate-200 font-medium block">
-                      所有模擬存款、獎金和分類賬餘額均嚴格綁定至此本地工作區配置文件。分類賬審計每小時自動清除，且無任何外部責任或實際法律義務。
-                    </span>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-150/40 dark:border-slate-850">
-                    <span className="font-extrabold text-amber-600 dark:text-amber-400 block text-[10px] uppercase mb-1">
-                      3. 安全防護與合規審計
-                    </span>
-                    <span className="text-slate-800 dark:text-slate-200 font-medium block">
-                      MGM 平台配備最先進的本地加密與會話保護技術，確保所有模擬操作和 VIP 帳戶活動都在最高安全級別下進行。用戶有義務維護會話安全。
-                    </span>
+                    <span className="font-extrabold text-slate-700 dark:text-slate-200 block text-[10px] uppercase mb-1">2. 财务结算限额</span>
+                    <span>所有模拟存款、奖金及账面余额均严格绑定于当前本地工作区配置。账目数据每小时进行一次结算核查，且不涉及任何外部债务责任。</span>
                   </div>
                 </div>
-                
-                <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                    法律聲明：訪問這些安全指令對經過驗證的本地用戶會話完全私密。這使機密準則免受公眾視圖的影響。
-                  </p>
-                </div>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800 font-mono">
+                  法律声明：对上述安全准则的访问仅限于经身份验证的本地用户会话，以确保机密性规定不向公众披露。
+                </p>
               </div>
 
               {/* Modal Footer */}
@@ -847,7 +1111,7 @@ export const Dashboard: React.FC = () => {
                   onClick={() => setShowTermsModal(false)}
                   className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all hover:scale-105 active:scale-95 cursor-pointer"
                 >
-                  Understood
+                  我已了解
                 </button>
               </div>
             </motion.div>

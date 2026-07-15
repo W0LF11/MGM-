@@ -89,14 +89,17 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
     setStatusMsg(null);
     try {
       const currentOverrides = user.diceOverrides || {};
+      const slotData: any = { outcome };
+      if (outcome === 'win') {
+        if (targetCombo !== undefined) slotData.target = targetCombo;
+        if (winPct !== undefined) slotData.winPct = winPct;
+      } else if (outcome === 'lose') {
+        if (lossPct !== undefined) slotData.lossPct = lossPct;
+      }
+
       const updatedOverrides = {
         ...currentOverrides,
-        [periodId]: {
-          outcome,
-          target: outcome === 'win' ? targetCombo : undefined,
-          winPct: outcome === 'win' ? winPct : undefined,
-          lossPct: outcome === 'lose' ? lossPct : undefined,
-        }
+        [periodId]: slotData
       };
 
       await adminUpdateUserProfile(user.id, { diceOverrides: updatedOverrides });
