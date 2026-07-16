@@ -38,6 +38,18 @@ const MainAppContent: React.FC = () => {
     root.classList.remove('light');
   }, []);
 
+  // Listen for global tab switching events
+  useEffect(() => {
+    const handleSwitchTab = (e: Event) => {
+      const customEvent = e as CustomEvent<{ tab: string; subTab?: string }>;
+      if (customEvent.detail && customEvent.detail.tab) {
+        handleNavigate(customEvent.detail.tab, customEvent.detail.subTab);
+      }
+    };
+    window.addEventListener('switch-tab', handleSwitchTab);
+    return () => window.removeEventListener('switch-tab', handleSwitchTab);
+  }, []);
+
   // Handle privilege access check for administration page
   useEffect(() => {
     if (currentTab === 'admin' && currentRole !== 'admin' && currentRole !== 'super_admin') {

@@ -415,7 +415,7 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
                 </span>
                 
                 <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded text-[10px]">
-                  <span className="text-[9px] text-slate-400 font-mono font-bold">Wager: ₹</span>
+                  <span className="text-[9px] text-slate-400 font-mono font-bold">Wager: $</span>
                   <input
                     type="number"
                     value={testBetAmount}
@@ -462,12 +462,12 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
               <div className="grid grid-cols-2 gap-2 text-[10px] pt-1">
                 <div className={`p-1.5 rounded border ${outcome === 'win' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-slate-900/40 border-slate-850'}`}>
                   <span className="text-slate-400 block text-[9px] font-bold">ON WIN RETURN</span>
-                  <strong className="text-emerald-400 font-mono text-xs block">₹{winPayout.toFixed(2)}</strong>
+                  <strong className="text-emerald-400 font-mono text-xs block">${winPayout.toFixed(2)}</strong>
                 </div>
 
                 <div className={`p-1.5 rounded border ${outcome === 'lose' ? 'bg-rose-500/10 border-rose-500/20' : 'bg-slate-900/40 border-slate-850'}`}>
                   <span className="text-slate-400 block text-[9px] font-bold">ON LOSS RETURN</span>
-                  <strong className="text-rose-400 font-mono text-xs block">₹{lossPayout.toFixed(2)}</strong>
+                  <strong className="text-rose-400 font-mono text-xs block">${lossPayout.toFixed(2)}</strong>
                 </div>
               </div>
             </div>

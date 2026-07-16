@@ -73,28 +73,32 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({ onNavigate, onPlayGame }) =>
   }, []);
 
   const [activePlayers, setActivePlayers] = useState<Record<string, number>>({
-    dice: 1548,
-    lucky_number: 1642,
-    spin_wheel: 2492,
-    coin_flip: 1512,
-    color_match: 1719,
-    lucky_seven: 1942,
-    card_clash: 1583,
-    treasure_box: 1612,
-    puzzle_arena: 1534,
-    quiz_battle: 1515,
-    number_rush: 1589,
-    fortune_draw: 1711,
+    dice: 27415,
+    lucky_number: 19842,
+    spin_wheel: 23150,
+    coin_flip: 18452,
+    color_match: 21915,
+    lucky_seven: 24219,
+    card_clash: 18534,
+    treasure_box: 20112,
+    puzzle_arena: 18150,
+    quiz_battle: 19520,
+    number_rush: 18942,
+    fortune_draw: 22105,
   });
 
-  // Simulating live active slots and spinner counts ticking up/down above 1500+
+  // Simulating live active slots and spinner counts ticking up/down around 18k-25k and 25k+ for dice
   useEffect(() => {
     const timer = setInterval(() => {
       setActivePlayers(prev => {
         const next = { ...prev };
         Object.keys(next).forEach(key => {
-          const delta = Math.floor(Math.random() * 21) - 10; // -10 to +10
-          next[key] = Math.max(1500, (next[key] || 1500) + delta);
+          const delta = Math.floor(Math.random() * 41) - 20; // -20 to +20
+          if (key === 'dice') {
+            next[key] = Math.max(25100, (next[key] || 27000) + delta);
+          } else {
+            next[key] = Math.max(18000, Math.min(25000, (next[key] || 21000) + delta));
+          }
         });
         return next;
       });

@@ -29,7 +29,9 @@ import {
   ArrowRightLeft,
   Award,
   Activity,
-  Edit2
+  Edit2,
+  Gift,
+  ArrowRight
 } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
@@ -52,7 +54,9 @@ export const Dashboard: React.FC = () => {
     currentRole,
     setRole,
     jackpotTickets,
-    buyJackpotTicket
+    buyJackpotTicket,
+    addMessageToTicket,
+    addLocalNotification
   } = usePlatform();
 
   // Auth form states
@@ -160,6 +164,50 @@ export const Dashboard: React.FC = () => {
   const handleQuickLogin = async (mockEmail: string) => {
     setEmail(mockEmail);
     await login(mockEmail);
+  };
+
+  const handleDepositTierClick = async (tier: { deposit: number; bonus: number }, idx: number) => {
+    if (!currentUser) {
+      alert("Please log in or register to initiate secure deposit inquiries!");
+      return;
+    }
+
+    try {
+      const ticketId = `CHAT_${currentUser.id}`;
+      const inquiryMessage = `I want to deposit the amount of $${tier.deposit.toLocaleString()}! Please explain to me how much bonus I will get, and help me with the process.`;
+
+      // Add user message to ticket
+      await addMessageToTicket(ticketId, inquiryMessage, 'user');
+
+      // Add support reply with delay
+      setTimeout(async () => {
+        try {
+          const reply = `Greetings, ${currentUser.username}! 🌟 You are qualified for our TIER ${idx + 1} Premium Bonus Campaign. 
+
+By making a single deposit of $${tier.deposit.toLocaleString()}, you will be granted an instant bonus of $${tier.bonus.toLocaleString()} (credited directly to your gaming wallet)! 
+
+Would you like me to guide you through our secure payment channels to secure this $${tier.bonus.toLocaleString()} bonus right now?`;
+          await addMessageToTicket(ticketId, reply, 'support');
+        } catch (err) {
+          console.error('Error adding support reply:', err);
+        }
+      }, 1000);
+
+      // Trigger notification
+      if (addLocalNotification) {
+        addLocalNotification(
+          'Deposit Inquiry Lodged',
+          `Inquiry for TIER ${idx + 1} ($${tier.deposit.toLocaleString()} deposit) sent. Redirecting to chat support...`,
+          'support'
+        );
+      }
+
+      // Switch to support tab
+      window.dispatchEvent(new CustomEvent('switch-tab', { detail: { tab: 'support' } }));
+    } catch (err) {
+      console.error('Error handling deposit tier click:', err);
+      alert('An error occurred. Please open chat support directly.');
+    }
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -591,7 +639,7 @@ export const Dashboard: React.FC = () => {
                 150% First Deposit Matching Bonus
               </h4>
               <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-relaxed font-mono">
-                Initiate your first ledger deposit of ₹5,000 / $100 or higher and receive a 150% match instantly credited to your game ledger.
+                Initiate your first ledger deposit of $100 or higher and receive a 150% match instantly credited to your game ledger.
               </p>
             </div>
             <div className="text-[9px] font-mono text-amber-600 dark:text-amber-500 font-bold">
@@ -790,6 +838,133 @@ export const Dashboard: React.FC = () => {
               </form>
             )}
           </div>
+
+          {/* DYNAMIC DEPOSIT REWARDS PROMOTION */}
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, type: "spring", bounce: 0.15 }}
+            className="rounded-3xl bg-gradient-to-b from-amber-500/10 via-slate-950/20 to-slate-950/60 p-6 space-y-5 border border-amber-500/25 dark:border-amber-900/35 shadow-2xl relative overflow-hidden"
+          >
+            {/* Soft Ambient Radial Lights */}
+            <div className="absolute top-0 right-0 -mt-10 -mr-10 w-44 h-44 bg-gradient-to-br from-amber-400/30 to-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+            
+            <div className="flex items-center justify-between border-b border-slate-200/10 dark:border-slate-800/60 pb-4 relative z-10">
+              <div className="flex items-center gap-3">
+                <span className="p-3 bg-gradient-to-tr from-amber-400 via-orange-500 to-amber-600 text-white rounded-2xl shadow-xl shadow-orange-500/20 relative overflow-hidden group">
+                  <span className="absolute inset-0 bg-white/20 rounded-2xl scale-0 group-hover:scale-100 transition-transform duration-300 pointer-events-none" />
+                  <Gift className="h-5 w-5 animate-pulse text-white" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white font-sans flex items-center gap-1.5">
+                    Deposit Bonus Carnival <Sparkles className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400 animate-spin" style={{ animationDuration: '6s' }} />
+                  </h3>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400 font-mono font-bold flex items-center gap-1">
+                    <span>⚡ Single payment rewards program</span>
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+                  </p>
+                </div>
+              </div>
+              <div className="bg-amber-500/10 dark:bg-slate-950/85 px-3 py-1 rounded-xl border border-amber-500/20 text-[9px] font-mono font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">
+                Instant Credit
+              </div>
+            </div>
+
+            <motion.div 
+              variants={{
+                hidden: { opacity: 0 },
+                show: {
+                  opacity: 1,
+                  transition: { staggerChildren: 0.08 }
+                }
+              }}
+              initial="hidden"
+              animate="show"
+              className="space-y-3 relative z-10"
+            >
+              {[
+                { deposit: 1000, bonus: 99, tag: "Standard Plus", gradient: "from-amber-500/5 to-transparent dark:from-amber-500/10 dark:to-transparent", border: "border-amber-500/20", text: "text-amber-600 dark:text-amber-400" },
+                { deposit: 3000, bonus: 199, tag: "Silver Tier", gradient: "from-slate-400/5 to-transparent dark:from-slate-400/10 dark:to-transparent", border: "border-slate-400/20", text: "text-slate-600 dark:text-slate-300" },
+                { deposit: 5000, bonus: 399, tag: "Gold Deluxe", gradient: "from-yellow-500/5 to-transparent dark:from-yellow-400/10 dark:to-transparent", border: "border-yellow-400/25", text: "text-yellow-600 dark:text-yellow-400" },
+                { deposit: 10000, bonus: 799, tag: "VIP Platinum", gradient: "from-purple-500/10 to-transparent dark:from-purple-500/15 dark:to-transparent", border: "border-purple-500/20", text: "text-purple-600 dark:text-purple-400", premium: true },
+                { deposit: 20000, bonus: 1999, tag: "VIP Imperial", gradient: "from-indigo-500/10 to-transparent dark:from-indigo-500/15 dark:to-transparent", border: "border-indigo-500/20", text: "text-indigo-600 dark:text-indigo-400", premium: true },
+                { deposit: 50000, bonus: 5999, tag: "MGM Legend", gradient: "from-emerald-500/10 to-transparent dark:from-emerald-500/15 dark:to-transparent", border: "border-emerald-500/25", text: "text-emerald-600 dark:text-emerald-400", premium: true, hyper: true }
+              ].map((tier, idx) => (
+                <motion.div
+                  key={idx}
+                  variants={{
+                    hidden: { opacity: 0, x: -15 },
+                    show: { opacity: 1, x: 0 }
+                  }}
+                  whileHover={{ scale: 1.02, x: 4 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleDepositTierClick(tier, idx)}
+                  className={`group relative flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-2xl bg-gradient-to-br ${tier.gradient} hover:from-slate-100 hover:to-slate-200 dark:hover:from-slate-900 dark:hover:to-slate-950 border ${tier.border} transition-all duration-300 cursor-pointer shadow-md overflow-hidden`}
+                >
+                  {/* Glowing hover light */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/5 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] pointer-events-none" />
+
+                  <div className="flex items-center gap-3 relative z-10">
+                    <div className="flex flex-col items-center justify-center min-w-[50px] bg-white/40 dark:bg-slate-950/80 px-2 py-1 rounded-xl border border-slate-200 dark:border-slate-800">
+                      <span className="text-[9px] font-black font-mono text-slate-500 dark:text-slate-400">
+                        TIER {idx + 1}
+                      </span>
+                      <span className="text-[7.5px] font-black text-slate-400 dark:text-slate-500 tracking-wider uppercase mt-0.5">
+                        {tier.tag.split(' ')[0]}
+                      </span>
+                    </div>
+
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-slate-850 dark:text-slate-100 group-hover:text-amber-500 dark:group-hover:text-amber-400 transition-colors">
+                          Single Deposit of ${tier.deposit.toLocaleString()}
+                        </span>
+                        {tier.premium && (
+                          <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[7px] font-black tracking-widest rounded border border-amber-500/20 uppercase">
+                            VIP
+                          </span>
+                        )}
+                        {tier.hyper && (
+                          <span className="px-1.5 py-0.5 bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[7px] font-black tracking-widest rounded border border-rose-500/20 uppercase animate-pulse">
+                            MAX
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[9.5px] text-slate-500 dark:text-slate-400/80 font-semibold font-mono flex items-center gap-1 group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-colors">
+                        <span>Click to claim bonus via live chat</span>
+                        <ArrowRight className="h-2.5 w-2.5 text-slate-400 group-hover:text-amber-500 dark:group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 justify-between sm:justify-end mt-2 sm:mt-0 pt-2 sm:pt-0 border-t border-slate-200/10 sm:border-t-0 relative z-10">
+                    <div className="flex items-center gap-1.5 bg-white/40 dark:bg-slate-950/80 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800">
+                      <span className="text-[8px] font-bold text-slate-450 dark:text-slate-500 font-mono uppercase">Get</span>
+                      <div className="flex items-baseline gap-0.5">
+                        <span className={`text-[10px] font-black ${tier.text}`}>$</span>
+                        <span className={`text-[14px] font-black font-mono tracking-tight ${tier.text}`}>
+                          {tier.bonus.toLocaleString()}
+                        </span>
+                      </div>
+                      <span className="text-[8px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1 rounded font-mono">
+                        BONUS
+                      </span>
+                    </div>
+                    
+                    <span className="p-1.5 bg-amber-500/5 dark:bg-amber-500/10 rounded-xl border border-amber-500/10 group-hover:bg-amber-500 group-hover:text-slate-950 text-amber-500 dark:text-amber-400 transition-all duration-300">
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </span>
+                  </div>
+                </motion.div>
+              ))}
+            </motion.div>
+
+            {/* Disclaimer with soft pulse */}
+            <div className="text-[9px] font-mono text-amber-600 dark:text-amber-400/80 text-center font-bold bg-amber-500/5 py-2.5 rounded-2xl border border-amber-500/10 relative z-10">
+              * Bonuses are instantly credited upon deposit verification. Terms apply.
+            </div>
+          </motion.div>
 
         </div>
 
@@ -1042,82 +1217,6 @@ export const Dashboard: React.FC = () => {
         </div>
 
       </div>
-
-      {/* Subtle Info Button for Terms & Regulatory Conditions */}
-      <div className="flex justify-center items-center py-4" id="user-terms-container">
-        <button
-          onClick={() => setShowTermsModal(true)}
-          className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/50 dark:hover:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs"
-          id="btn-show-terms-modal"
-          title="Terms & Regulatory Directives"
-        >
-          <Info className="h-4 w-4 text-slate-400 dark:text-slate-500" />
-        </button>
-      </div>
-
-      {/* Terms & Conditions Modal Overlay */}
-      <AnimatePresence>
-        {showTermsModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/65 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white dark:bg-slate-950 border border-slate-150 dark:border-slate-850 shadow-2xl p-6 space-y-4"
-            >
-              {/* Close Button */}
-              <button
-                onClick={() => setShowTermsModal(false)}
-                className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-all cursor-pointer"
-                title="Close"
-              >
-                <X className="h-4 w-4" />
-              </button>
-
-              {/* Title Header */}
-              <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-                <span className="p-1.5 bg-amber-50 dark:bg-amber-950/30 rounded-lg text-amber-500">
-                  <Shield className="h-4 w-4" />
-                </span>
-                <h3 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">
-                  商业条款与监管规定
-                </h3>
-              </div>
-
-              {/* Modal Body */}
-              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-3 leading-relaxed font-sans max-h-[300px] overflow-y-auto pr-1">
-                <p>
-                  欢迎使用澳门美高梅（<strong className="text-slate-800 dark:text-white">MGM</strong>）高端博彩平台。在访问个人用户控制面板时，即视为您确认并同意遵守以下既定的安全商业准则：
-                </p>
-                <div className="space-y-3 pt-2">
-                  <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-150/40 dark:border-slate-850">
-                    <span className="font-extrabold text-slate-700 dark:text-slate-200 block text-[10px] uppercase mb-1">1. VIP 权限与准入机制</span>
-                    <span>执行委员会保留最终决定权，可锁定系统游戏、重新设定 RTP（玩家回报率）指标，以及调整 <strong className="text-amber-500 dark:text-amber-400">VIP</strong> 权限。受限 <strong className="text-amber-500 dark:text-amber-400">VIP</strong> 系统需具备特定的账户准入资格。</span>
-                  </div>
-                  <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-150/40 dark:border-slate-850">
-                    <span className="font-extrabold text-slate-700 dark:text-slate-200 block text-[10px] uppercase mb-1">2. 财务结算限额</span>
-                    <span>所有模拟存款、奖金及账面余额均严格绑定于当前本地工作区配置。账目数据每小时进行一次结算核查，且不涉及任何外部债务责任。</span>
-                  </div>
-                </div>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800 font-mono">
-                  法律声明：对上述安全准则的访问仅限于经身份验证的本地用户会话，以确保机密性规定不向公众披露。
-                </p>
-              </div>
-
-              {/* Modal Footer */}
-              <div className="flex justify-end pt-2">
-                <button
-                  onClick={() => setShowTermsModal(false)}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                >
-                  我已了解
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Admin Alerts & Notifications Modal */}
       <AnimatePresence>

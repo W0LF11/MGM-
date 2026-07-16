@@ -160,7 +160,7 @@ service cloud.firestore {
         (request.auth.uid == userId && 
          incoming().diff(existing()).affectedKeys().hasOnly([
            'username', 'phone', 'avatar', 'isEmailVerified', 'isMobileVerified', 
-           'balance', 'bonusBalance', 'password',
+           'balance', 'bonusBalance', 'password', 'totalWagered',
            'nextSpinResult', 'nextLuckyResult', 'nextDiceResult', 'nextCoinFlipResult', 
            'nextColorMatchResult', 'nextLuckySevenResult', 'nextCardClashResult', 'nextTreasureBoxResult', 
            'nextPuzzleArenaResult', 'nextQuizBattleResult', 'nextNumberRushResult', 'nextFortuneDrawResult',
@@ -230,7 +230,7 @@ service cloud.firestore {
 
     // COLLECTION: SUPPORT TICKETS
     match /tickets/{ticketId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isSupport());
+      allow get: if isSignedIn() && (ticketId == 'CHAT_' + request.auth.uid || resource == null || resource.data.userId == request.auth.uid || isSupport());
       allow list: if isSignedIn() && (isSupport() || resource.data.userId == request.auth.uid);
       allow create: if isSignedIn() && isValidId(ticketId) && incoming().userId == request.auth.uid;
       allow update: if isSignedIn() && (

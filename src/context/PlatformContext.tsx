@@ -101,6 +101,7 @@ interface PlatformContextType {
   adminUpdateGameConfig: (gameId: string, rtp: number, minBet: number, maxBet: number) => Promise<void>;
   adminUpdateDiceSchedules: (schedules: DiceSchedule[], winningPercentage: number, jackpotMoney: number) => Promise<void>;
   adminUpdateDiceManualFields: (fields: { manualResult?: string | null, manualTimer?: number | null, manualProfitRate?: number | null }) => Promise<void>;
+  adminUpdateDiceGlobalOverrides: (overrides: Record<string, any>) => Promise<void>;
   adminCreateAnnouncement: (title: string, content: string, type: 'announcement' | 'promotion' | 'event', bannerImage?: string) => Promise<void>;
   adminDeleteAnnouncement: (id: string) => Promise<void>;
   adminUpdateFAQ: (faqs: FAQItem[]) => void;
@@ -1293,9 +1294,42 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const addMessageToTicket = async (ticketId: string, text: string, sender: 'user' | 'support', file?: { name: string, url: string }) => {
     try {
       const ticketRef = doc(db, 'tickets', ticketId);
-      const tSnap = await getDoc(ticketRef);
-      if (!tSnap.exists()) return;
-      const tData = tSnap.data() as SupportTicket;
+      let tSnap = await getDoc(ticketRef);
+      let tData: SupportTicket;
+
+      if (!tSnap.exists()) {
+        if (ticketId.startsWith('CHAT_') && currentUser) {
+          const agents = ['Agent Emma', 'Agent Liam', 'Supervisor Sophia', 'Analyst Dave', 'VIP Concierge Chloe'];
+          const randomAgent = agents[Math.floor(Math.random() * agents.length)];
+          tData = {
+            id: ticketId,
+            userId: currentUser.id,
+            username: currentUser.username,
+            title: 'MGM Live Direct Support',
+            category: 'other',
+            status: 'open',
+            priority: 'high',
+            createdAt: formatDate(),
+            updatedAt: formatDate(),
+            agentName: randomAgent,
+            messages: [
+              {
+                id: 'WELCOME_MSG',
+                sender: 'support',
+                senderName: randomAgent,
+                text: `Hello ${currentUser.username}! Welcome to MGM Macau Direct Live Support. I am your assigned support representative. How can we help you today?`,
+                timestamp: formatDate(),
+                isRead: false
+              }
+            ]
+          };
+          await setDoc(ticketRef, tData);
+        } else {
+          return;
+        }
+      } else {
+        tData = tSnap.data() as SupportTicket;
+      }
 
       const newMessage: SupportMessage = {
         id: genId(),
@@ -1308,8 +1342,10 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         ...(file?.url ? { fileUrl: file.url } : {})
       };
 
+      const updatedMessages = [...tData.messages, newMessage];
+
       await updateDoc(ticketRef, {
-        messages: [...tData.messages, newMessage],
+        messages: updatedMessages,
         updatedAt: formatDate(),
         status: sender === 'support' ? 'assigned' : tData.status
       });
@@ -1320,7 +1356,25 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       // Simulate Auto support officer replies for player texts
       if (sender === 'user' && tData.status !== 'resolved') {
-        const reply = `We have assigned a support officer to your conversation, and they will shortly reply to your chat. Please stand by.`;
+        let reply = `We have assigned a support officer to your conversation, and they will shortly reply to your chat. Please stand by.`;
+        
+        if (ticketId.startsWith('CHAT_')) {
+          const userMessagesCount = updatedMessages.filter(m => m.sender === 'user').length;
+          if (userMessagesCount === 1) {
+            const displayName = currentUser?.username || 'Valued Player';
+            reply = `Hi ${displayName}! Welcome to MGM 澳門美高梅 Direct Live Support. 🌟
+
+To ensure we assist you as efficiently as possible, please confirm or provide your details:
+• 👤 **Username**: ${currentUser?.username || 'Please type your preferred username'}
+• 📱 **Phone Number**: ${currentUser?.phone || 'Please type your active phone number'}
+• ✉️ **Email/Gmail**: ${currentUser?.email || 'Please type your Gmail / email'}
+
+We have assigned you a dedicated chat support agent and he will shortly reply to you here in this direct chat.`;
+          } else {
+            reply = `Your support agent is reviewing your message and will reply shortly. Thank you for your patience!`;
+          }
+        }
+
         if (!pendingRepliesRef.current.has(ticketId)) {
           pendingRepliesRef.current.add(ticketId);
           setTimeout(async () => {
@@ -1757,7 +1811,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         } else {
           // If withdrawal, deduct the balance now that it's approved
           if (userData.balance < reqData.amount) {
-            throw new Error(`Insufficient available wallet balance! User only has ₹${userData.balance.toLocaleString('en-IN')}, but requested ₹${reqData.amount.toLocaleString('en-IN')}.`);
+            throw new Error(`Insufficient available wallet balance! User only has $${userData.balance.toLocaleString('en-US')}, but requested $${reqData.amount.toLocaleString('en-US')}.`);
           }
           tx.update(uRef, { balance: parseFloat((userData.balance - reqData.amount).toFixed(2)) });
         }
@@ -1883,6 +1937,14 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const adminUpdateDiceManualFields = async (fields: { manualResult?: string | null, manualTimer?: number | null, manualProfitRate?: number | null }) => {
     try {
       await updateDoc(doc(db, 'games', 'dice'), fields);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'games/dice');
+    }
+  };
+
+  const adminUpdateDiceGlobalOverrides = async (overrides: Record<string, any>) => {
+    try {
+      await updateDoc(doc(db, 'games', 'dice'), { globalDiceOverrides: overrides });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'games/dice');
     }
@@ -2074,6 +2136,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       adminUpdateGameConfig,
       adminUpdateDiceSchedules,
       adminUpdateDiceManualFields,
+      adminUpdateDiceGlobalOverrides,
       adminCreateAnnouncement,
       adminDeleteAnnouncement,
       adminUpdateFAQ,

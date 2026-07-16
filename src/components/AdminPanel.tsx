@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { usePlatform } from '../context/PlatformContext';
 import { DiceSchedule } from '../types';
 import { DiceController } from './DiceController';
+import { GlobalDiceController } from './GlobalDiceController';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -113,8 +114,8 @@ export const AdminPanel: React.FC = () => {
   };
 
   // Main active sidebar tab matching the screenshot exactly
-  // Options: 'members' | 'deposits' | 'withdrawals' | 'support' | 'process' | 'dice' | 'referrals' | 'jackpot'
-  const [activeTab, setActiveTab] = useState<'members' | 'deposits' | 'withdrawals' | 'support' | 'process' | 'dice' | 'referrals' | 'jackpot'>('members');
+  // Options: 'members' | 'deposits' | 'withdrawals' | 'support' | 'dice' | 'referrals' | 'jackpot'
+  const [activeTab, setActiveTab] = useState<'members' | 'deposits' | 'withdrawals' | 'support' | 'dice' | 'referrals' | 'jackpot'>('members');
   
   // Inner Subtabs for Process System
   const [processSubTab, setProcessSubTab] = useState<'tuning' | 'credentials'>('tuning');
@@ -463,14 +464,14 @@ export const AdminPanel: React.FC = () => {
     const list = [...filteredUsers];
     // Seeding beautiful realistic mock users if the system has fewer profiles
     const fillers = [
-      { id: 'u_p1', username: 'prince chcek', email: 'princechcek@gamil.com', phone: '+9199228811', avatar: '🦁', status: 'active', balance: -7780, bonusBalance: 120, creditScore: 100, taskProgress: '4 / 15', expectedCommission: '₹1850 - 2000', expectedCommissionType: 'automatic', spinLocked: true, tasksLocked: false, createdAt: '2026-04-20T11:22:00Z', isSimulated: true },
-      { id: 'u_p2', username: 'Ayush Singh', email: 'ayushsingh1356ma@gm...', phone: '+9198334411', avatar: '🐱', status: 'active', balance: 12825, bonusBalance: 450, creditScore: 100, taskProgress: '15 / 15', expectedCommission: '₹825', expectedCommissionType: 'manual', spinLocked: true, tasksLocked: false, createdAt: '2026-05-02T02:47:00Z', isSimulated: true },
-      { id: 'u_p3', username: 'sarah_vip', email: 'sarah.vip@lux.com', phone: '+1987654321', avatar: '💎', status: 'active', balance: 45200, bonusBalance: 1200, creditScore: 98, taskProgress: '12 / 15', expectedCommission: '₹3400 - 4000', expectedCommissionType: 'automatic', spinLocked: false, tasksLocked: false, createdAt: '2026-03-12T10:15:00Z', isSimulated: true },
-      { id: 'u_p4', username: 'alex_jackpot', email: 'alex@gaming.com', phone: '+1234567890', avatar: '👑', status: 'active', balance: 1450, bonusBalance: 150, creditScore: 95, taskProgress: '8 / 15', expectedCommission: '₹1200 - 1500', expectedCommissionType: 'automatic', spinLocked: false, tasksLocked: true, createdAt: '2026-01-10T12:00:00Z', isSimulated: true },
-      { id: 'u_p5', username: 'casual_gambler', email: 'mark@casual.net', phone: '+15550199', avatar: '🐼', status: 'suspended', balance: 5.4, bonusBalance: 0, creditScore: 45, taskProgress: '1 / 15', expectedCommission: '₹0', expectedCommissionType: 'manual', spinLocked: true, tasksLocked: true, createdAt: '2026-03-01T15:45:00Z', isSimulated: true },
-      { id: 'u_p6', username: 'lucky_charm', email: 'charm@clover.ie', phone: '+353110292', avatar: '🍀', status: 'active', balance: 420, bonusBalance: 20, creditScore: 92, taskProgress: '15 / 15', expectedCommission: '₹950', expectedCommissionType: 'manual', spinLocked: false, tasksLocked: false, createdAt: '2026-04-12T18:22:00Z', isSimulated: true },
-      { id: 'u_p7', username: 'rishabh_sharma', email: 'rishabh.sh@gmail.com', phone: '+9199882244', avatar: '🦊', status: 'active', balance: -2500, bonusBalance: 80, creditScore: 85, taskProgress: '6 / 15', expectedCommission: '₹900 - 1100', expectedCommissionType: 'automatic', spinLocked: true, tasksLocked: false, createdAt: '2026-05-10T14:30:00Z', isSimulated: true },
-      { id: 'u_p8', username: 'priya_m', email: 'priyam100@gmail.com', phone: '+9198223344', avatar: '🦄', status: 'active', balance: 8430, bonusBalance: 300, creditScore: 97, taskProgress: '10 / 15', expectedCommission: '₹1500 - 1800', expectedCommissionType: 'automatic', spinLocked: false, tasksLocked: false, createdAt: '2026-05-15T09:12:00Z', isSimulated: true },
+      { id: 'u_p1', username: 'prince chcek', email: 'princechcek@gamil.com', phone: '+9199228811', avatar: '🦁', status: 'active', balance: -7780, bonusBalance: 120, creditScore: 100, taskProgress: '4 / 15', expectedCommission: '$1850 - 2000', expectedCommissionType: 'automatic', spinLocked: true, tasksLocked: false, createdAt: '2026-04-20T11:22:00Z', isSimulated: true },
+      { id: 'u_p2', username: 'Ayush Singh', email: 'ayushsingh1356ma@gm...', phone: '+9198334411', avatar: '🐱', status: 'active', balance: 12825, bonusBalance: 450, creditScore: 100, taskProgress: '15 / 15', expectedCommission: '$825', expectedCommissionType: 'manual', spinLocked: true, tasksLocked: false, createdAt: '2026-05-02T02:47:00Z', isSimulated: true },
+      { id: 'u_p3', username: 'sarah_vip', email: 'sarah.vip@lux.com', phone: '+1987654321', avatar: '💎', status: 'active', balance: 45200, bonusBalance: 1200, creditScore: 98, taskProgress: '12 / 15', expectedCommission: '$3400 - 4000', expectedCommissionType: 'automatic', spinLocked: false, tasksLocked: false, createdAt: '2026-03-12T10:15:00Z', isSimulated: true },
+      { id: 'u_p4', username: 'alex_jackpot', email: 'alex@gaming.com', phone: '+1234567890', avatar: '👑', status: 'active', balance: 1450, bonusBalance: 150, creditScore: 95, taskProgress: '8 / 15', expectedCommission: '$1200 - 1500', expectedCommissionType: 'automatic', spinLocked: false, tasksLocked: true, createdAt: '2026-01-10T12:00:00Z', isSimulated: true },
+      { id: 'u_p5', username: 'casual_gambler', email: 'mark@casual.net', phone: '+15550199', avatar: '🐼', status: 'suspended', balance: 5.4, bonusBalance: 0, creditScore: 45, taskProgress: '1 / 15', expectedCommission: '$0', expectedCommissionType: 'manual', spinLocked: true, tasksLocked: true, createdAt: '2026-03-01T15:45:00Z', isSimulated: true },
+      { id: 'u_p6', username: 'lucky_charm', email: 'charm@clover.ie', phone: '+353110292', avatar: '🍀', status: 'active', balance: 420, bonusBalance: 20, creditScore: 92, taskProgress: '15 / 15', expectedCommission: '$950', expectedCommissionType: 'manual', spinLocked: false, tasksLocked: false, createdAt: '2026-04-12T18:22:00Z', isSimulated: true },
+      { id: 'u_p7', username: 'rishabh_sharma', email: 'rishabh.sh@gmail.com', phone: '+9199882244', avatar: '🦊', status: 'active', balance: -2500, bonusBalance: 80, creditScore: 85, taskProgress: '6 / 15', expectedCommission: '$900 - 1100', expectedCommissionType: 'automatic', spinLocked: true, tasksLocked: false, createdAt: '2026-05-10T14:30:00Z', isSimulated: true },
+      { id: 'u_p8', username: 'priya_m', email: 'priyam100@gmail.com', phone: '+9198223344', avatar: '🦄', status: 'active', balance: 8430, bonusBalance: 300, creditScore: 97, taskProgress: '10 / 15', expectedCommission: '$1500 - 1800', expectedCommissionType: 'automatic', spinLocked: false, tasksLocked: false, createdAt: '2026-05-15T09:12:00Z', isSimulated: true },
     ];
 
     fillers.forEach(f => {
@@ -489,7 +490,7 @@ export const AdminPanel: React.FC = () => {
     if (isNaN(amt)) return;
     
     if (selectedUser.isSimulated) {
-      alert(`[Simulated Profile] Adjusted balance of ${selectedUser.username} by ₹${amt}`);
+      alert(`[Simulated Profile] Adjusted balance of ${selectedUser.username} by $${amt}`);
       setOperationMode(null);
       setAdjustAmount('');
       return;
@@ -565,7 +566,7 @@ export const AdminPanel: React.FC = () => {
 
   const handleCommissionAdjust = async () => {
     if (!selectedUser) return;
-    const commText = commType === 'automatic' ? `₹${commMin} - ${commMax}` : `₹${commMin}`;
+    const commText = commType === 'automatic' ? `$${commMin} - ${commMax}` : `$${commMin}`;
     
     if (selectedUser.isSimulated) {
       alert(`[Simulated Profile] Commission updated to ${commText} (${commType.toUpperCase()})`);
@@ -729,7 +730,7 @@ export const AdminPanel: React.FC = () => {
           description: `Simulated wager stake on Spin Wheel`
         });
       });
-      alert(`🎉 Real-time ledger injection completed! Wagered: ₹${betAmount}, Won: ₹${winAmount} for ${user.username}.`);
+      alert(`🎉 Real-time ledger injection completed! Wagered: $${betAmount}, Won: $${winAmount} for ${user.username}.`);
     } catch (err: any) {
       alert(`Injection error: ${err.message}`);
     }
@@ -867,7 +868,6 @@ export const AdminPanel: React.FC = () => {
               { id: 'deposits', label: 'Deposit Requests', count: pendingDeposits.length },
               { id: 'withdrawals', label: 'Withdraw Requests', count: pendingWithdrawals.length },
               { id: 'support', label: 'Message History', count: openTicketsCount },
-              { id: 'process', label: 'Process System', count: 0 },
               { id: 'referrals', label: 'Admin Referrals', count: 0 },
               { id: 'jackpot', label: 'Jackpot Override', count: jackpotTickets.filter(t => t.status === 'pending').length }
             ].map(item => {
@@ -930,11 +930,11 @@ export const AdminPanel: React.FC = () => {
             <div className="flex gap-3">
               <div className="px-5 py-2.5 bg-emerald-500/5 border border-emerald-500/20 text-emerald-600 rounded-2xl flex flex-col items-center min-w-[120px]">
                 <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-500/80">Real Deposits</span>
-                <span className="text-sm font-extrabold font-mono mt-0.5">₹{(displayRealDeposits ?? 0).toLocaleString('en-IN')}</span>
+                <span className="text-sm font-extrabold font-mono mt-0.5">${(displayRealDeposits ?? 0).toLocaleString('en-US')}</span>
               </div>
               <div className="px-5 py-2.5 bg-blue-500/5 border border-blue-500/20 text-blue-600 rounded-2xl flex flex-col items-center min-w-[130px]">
                 <span className="text-[9px] font-bold uppercase tracking-wider text-blue-500/80 font-mono">Help Deposits</span>
-                <span className="text-sm font-extrabold font-mono mt-0.5">₹{(displayHelpDeposits ?? 0).toLocaleString('en-IN')}</span>
+                <span className="text-sm font-extrabold font-mono mt-0.5">${(displayHelpDeposits ?? 0).toLocaleString('en-US')}</span>
               </div>
             </div>
           </div>
@@ -949,12 +949,12 @@ export const AdminPanel: React.FC = () => {
 
             <div className="p-5 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">Total Commission</span>
-              <span className="text-2xl font-black text-emerald-600 mt-1 font-mono">₹{(displayTotalCommission ?? 0).toLocaleString('en-IN')}</span>
+              <span className="text-2xl font-black text-emerald-600 mt-1 font-mono">${(displayTotalCommission ?? 0).toLocaleString('en-US')}</span>
             </div>
 
             <div className="p-5 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">Total Withdraws</span>
-              <span className="text-2xl font-black text-rose-600 mt-1 font-mono">₹{(displayTotalWithdraws ?? 0).toLocaleString('en-IN')}</span>
+              <span className="text-2xl font-black text-rose-600 mt-1 font-mono">${(displayTotalWithdraws ?? 0).toLocaleString('en-US')}</span>
             </div>
 
             <div className="p-5 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
@@ -1088,7 +1088,7 @@ export const AdminPanel: React.FC = () => {
                           <td className="py-4 px-4 font-mono">
                             <div className="space-y-1">
                               <span className={`font-black text-sm block ${balanceColor}`}>
-                                ₹{(user.balance ?? 0).toLocaleString('en-IN')}
+                                ${(user.balance ?? 0).toLocaleString('en-US')}
                               </span>
                               <div className="flex items-center gap-2">
                                 <div className="w-16 bg-slate-100 h-1 rounded-full overflow-hidden">
@@ -1312,7 +1312,7 @@ export const AdminPanel: React.FC = () => {
                         <th className="py-3 px-4">User</th>
                         <th className="py-3 px-4">Timestamp</th>
                         <th className="py-3 px-4">Gateway</th>
-                        <th className="py-3 px-4 text-center">Amount (INR)</th>
+                        <th className="py-3 px-4 text-center">Amount (USD)</th>
                         <th className="py-3 px-4">UTR Reference</th>
                         <th className="py-3 px-4 text-right">Actions</th>
                       </tr>
@@ -1331,7 +1331,7 @@ export const AdminPanel: React.FC = () => {
                             {req.gateway || 'N/A'}
                           </td>
                           <td className="py-4 px-4 text-center font-black font-mono text-emerald-600 text-sm">
-                            ₹{(req.amount ?? 0).toLocaleString('en-IN')}
+                            ${(req.amount ?? 0).toLocaleString('en-US')}
                           </td>
                           <td className="py-4 px-4 font-mono">
                             <div className="inline-flex items-center gap-2 p-1.5 bg-slate-50 rounded-lg border border-slate-200">
@@ -1405,7 +1405,7 @@ export const AdminPanel: React.FC = () => {
                       <tr className="border-b border-slate-100 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
                         <th className="py-3 px-4">User</th>
                         <th className="py-3 px-4 text-center">Trust Risk Index</th>
-                        <th className="py-3 px-4 text-center">Amount (INR)</th>
+                        <th className="py-3 px-4 text-center">Amount (USD)</th>
                         <th className="py-3 px-4">Payout Account Vault</th>
                         <th className="py-3 px-4 text-right">Actions</th>
                       </tr>
@@ -1432,7 +1432,7 @@ export const AdminPanel: React.FC = () => {
                               </span>
                             </td>
                             <td className="py-4 px-4 text-center font-black font-mono text-blue-600 text-sm">
-                              ₹{(req.amount ?? 0).toLocaleString('en-IN')}
+                              ${(req.amount ?? 0).toLocaleString('en-US')}
                             </td>
                             <td className="py-4 px-4 font-mono">
                               <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 max-w-sm space-y-1.5">
@@ -1606,430 +1606,12 @@ export const AdminPanel: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 5: PROCESS SYSTEM (CMS, tuning and security credentials) */}
-          {activeTab === 'process' && (
-            <div className="space-y-6">
-              
-              {/* Inner Process Subtabs */}
-              <div className="flex gap-2.5 p-1 bg-slate-200/50 border border-slate-200 rounded-2xl w-fit">
-                <button
-                  onClick={() => setProcessSubTab('tuning')}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                    processSubTab === 'tuning' 
-                      ? 'bg-white shadow border border-slate-200/50 text-slate-900' 
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  ⚙️ CMS & RTP Tuning Desk
-                </button>
-                <button
-                  onClick={() => setProcessSubTab('credentials')}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                    processSubTab === 'credentials' 
-                      ? 'bg-white shadow border border-slate-200/50 text-slate-900' 
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  🔑 Administrator Passwords
-                </button>
-              </div>
 
-              {processSubTab === 'tuning' ? (
-                <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
-                  
-                  <div className="border-b border-slate-100 pb-3">
-                    <h3 className="text-lg font-black text-slate-900">CMS & RTP Configuration Tuning</h3>
-                    <p className="text-xs text-slate-500">Lock slots, override Return To Player (RTP) margins, and post promotional banners</p>
-                  </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    
-                    {/* Game Tuning */}
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">Gameplay Margin & Limit Overrides</h4>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[300px] overflow-y-auto pr-1">
-                        {games.map((g, idx) => {
-                          return (
-                            <div key={g.id ? `${g.id}-${idx}` : idx} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <span className="font-extrabold text-slate-900 block">{g.name}</span>
-                                  <span className="text-[9.5px] text-slate-400 block font-mono">Category: {g.category}</span>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingGameId(g.id);
-                                    setGameRtp(g.rtp);
-                                    setGameMinBet(g.minBet);
-                                    setGameMaxBet(g.maxBet);
-                                  }}
-                                  className="text-[9px] font-mono text-emerald-600 bg-emerald-100/50 border border-emerald-200 px-2 py-0.5 rounded"
-                                >
-                                  Override
-                                </button>
-                              </div>
-
-                              <div className="flex justify-between items-center text-[10.5px] font-mono">
-                                <span className="text-slate-500">Current RTP:</span>
-                                <span className="text-emerald-600 font-extrabold">{g.rtp}%</span>
-                              </div>
-
-                              <div className="flex justify-between items-center text-[10.5px] font-mono">
-                                <span className="text-slate-500">Game Lock:</span>
-                                <span className={`font-bold ${g.isLocked ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                  {g.isLocked ? 'LOCKED' : 'ONLINE'}
-                                </span>
-                              </div>
-
-                              {editingGameId === g.id && (
-                                <div className="pt-2 border-t border-slate-200 space-y-2">
-                                  <div className="space-y-1">
-                                    <label className="text-[8.5px] font-mono text-slate-400 uppercase">Target RTP %</label>
-                                    <input
-                                      type="number"
-                                      value={gameRtp}
-                                      onChange={(e) => setGameRtp(parseFloat(e.target.value))}
-                                      className="w-full bg-white rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-800"
-                                    />
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={() => {
-                                        adminUpdateGameConfig(g.id, gameRtp, gameMinBet, gameMaxBet);
-                                        setEditingGameId('');
-                                        alert(`${g.name} RTP updated to ${gameRtp}%!`);
-                                      }}
-                                      className="flex-1 py-1.5 bg-emerald-600 text-[9px] rounded text-white font-bold"
-                                    >
-                                      Save config
-                                    </button>
-                                    <button
-                                      onClick={() => handleLockGame(g.id, g.isLocked ?? false)}
-                                      className={`flex-1 py-1.5 text-[9px] rounded font-bold text-white ${g.isLocked ? 'bg-emerald-600' : 'bg-rose-600'}`}
-                                    >
-                                      {g.isLocked ? 'Unlock game' : 'Lock game'}
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Broadcast Announcement */}
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">Broadcast Promotional System Banners</h4>
-                      
-                      <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4 text-xs">
-                        <div className="space-y-1">
-                          <label className="text-[9.5px] font-mono text-slate-500 uppercase block font-bold">Campaign Title</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. 🏮 Mega Double Referral commission week"
-                            value={newAnnTitle}
-                            onChange={(e) => setNewAnnTitle(e.target.value)}
-                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[9.5px] font-mono text-slate-500 uppercase block font-bold">Campaign Message Body</label>
-                          <textarea
-                            rows={3}
-                            placeholder="Type promotional details here..."
-                            value={newAnnContent}
-                            onChange={(e) => setNewAnnContent(e.target.value)}
-                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none resize-none"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <label className="text-[9.5px] font-mono text-slate-500 uppercase block font-bold">Skin Theme</label>
-                            <select
-                              value={newAnnTheme}
-                              onChange={(e: any) => setNewAnnTheme(e.target.value)}
-                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700"
-                            >
-                              <option value="emerald">Emerald Oasis</option>
-                              <option value="sunset">Sunset Glow</option>
-                              <option value="indigo">Deep Cosmos</option>
-                              <option value="obsidian">Slate Terminal</option>
-                            </select>
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-[9.5px] font-mono text-slate-500 uppercase block font-bold">Category</label>
-                            <select
-                              value={newAnnType}
-                              onChange={(e: any) => setNewAnnType(e.target.value)}
-                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700"
-                            >
-                              <option value="announcement">Announcement</option>
-                              <option value="promotion">Promotion</option>
-                              <option value="event">Exclusive Event</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={async () => {
-                            if (!newAnnTitle || !newAnnContent) return;
-                            await adminCreateAnnouncement(newAnnTitle, newAnnContent, newAnnType, newAnnTheme);
-                            setNewAnnTitle('');
-                            setNewAnnContent('');
-                            alert('Promotional campaign published successfully to the homepage!');
-                          }}
-                          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl uppercase shadow-sm cursor-pointer"
-                        >
-                          Broadcast Campaign
-                        </button>
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
-                  
-                  <div className="border-b border-slate-100 pb-3">
-                    <h3 className="text-lg font-black text-slate-900">🔑 Security & Credentials Management</h3>
-                    <p className="text-xs text-slate-500">Change administrative credentials and view security rules setup guide</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    
-                    {/* Change Password form */}
-                    <div className="lg:col-span-5 p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
-                      <h4 className="text-xs font-bold uppercase text-slate-700 border-b border-slate-200 pb-2">Change Password</h4>
-                      
-                      <form
-                        onSubmit={async (e) => {
-                          e.preventDefault();
-                          const form = e.currentTarget;
-                          const newPass = (form.elements.namedItem('newPassword') as HTMLInputElement).value;
-                          const confirmPass = (form.elements.namedItem('confirmPassword') as HTMLInputElement).value;
-
-                          if (newPass !== confirmPass) {
-                            alert('Passwords do not match.');
-                            return;
-                          }
-                          if (newPass.length < 6) {
-                            alert('Firebase passwords must be at least 6 characters.');
-                            return;
-                          }
-
-                          if (!auth.currentUser) {
-                            alert('No authenticated Firebase session.');
-                            return;
-                          }
-
-                          try {
-                            await updatePassword(auth.currentUser, newPass);
-                            alert('🎉 Password updated successfully inside Firebase Authentication!');
-                            form.reset();
-                          } catch (err: any) {
-                            alert(`Error: ${err.message}`);
-                          }
-                        }}
-                        className="space-y-4 text-xs"
-                      >
-                        <div className="space-y-1">
-                          <label className="text-[9.5px] font-mono text-slate-500 uppercase block font-bold">New Password</label>
-                          <input
-                            type="password"
-                            name="newPassword"
-                            required
-                            placeholder="••••••••"
-                            className="w-full px-4 py-2 bg-white rounded-xl border border-slate-200 text-slate-800 font-mono"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[9.5px] font-mono text-slate-500 uppercase block font-bold">Confirm Password</label>
-                          <input
-                            type="password"
-                            name="confirmPassword"
-                            required
-                            placeholder="••••••••"
-                            className="w-full px-4 py-2 bg-white rounded-xl border border-slate-200 text-slate-800 font-mono"
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold uppercase cursor-pointer"
-                        >
-                          Update Password
-                        </button>
-                      </form>
-                    </div>
-
-                    {/* Step-by-Step guides */}
-                    <div className="lg:col-span-7 space-y-4 text-xs text-slate-600 leading-relaxed font-mono">
-                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
-                        <h4 className="text-xs font-bold uppercase text-slate-800 mb-2">Elevating user accounts to Admin</h4>
-                        <ol className="list-decimal pl-4 space-y-2 text-[10.5px]">
-                          <li>Navigate to your Firebase Project and open your <strong>Firestore Database</strong> console.</li>
-                          <li>Open the <strong className="text-indigo-600">users</strong> collection. Select the target user ID doc.</li>
-                          <li>Click "Add field", input name: <code className="bg-white px-1.5 py-0.5 border border-slate-200 rounded text-emerald-600 font-bold">role</code>, type: <code className="font-bold">string</code>, value: <code className="bg-white px-1.5 py-0.5 border border-slate-200 rounded text-indigo-600 font-bold">admin</code>.</li>
-                          <li>Save field. The user is immediately granted unrestricted console rights.</li>
-                        </ol>
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-              )}
-
-            </div>
-          )}
-
-           {/* TAB 6: 🎲 DICE CONTROLLER (Simplified Manual Controls) */}
+           {/* TAB 6: 🎲 DICE CONTROLLER (Global Manual Dice Control System) */}
           {activeTab === 'dice' && (
             <div className="space-y-6">
-              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                <div className="border-b border-slate-100 pb-4 mb-6">
-                  <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                    <span>🎲</span> Unified Manual Dice Controller
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Direct manual control over the Dice Game timer countdown, winning outcome number, and the profit multiplier yield.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  
-                  {/* 1. EASY TIME SELECTION */}
-                  <div className="bg-slate-50/75 p-5 rounded-2xl border border-slate-200/80 space-y-4">
-                    <div className="flex items-center gap-2 text-slate-800 font-extrabold text-sm uppercase tracking-wider font-mono">
-                      <span>⏱️</span> 1. Time Selection
-                    </div>
-                    <p className="text-[10.5px] text-slate-500 leading-relaxed">
-                      Set the remaining countdown timer in seconds for the active round. This overrides the background clock instantly.
-                    </p>
-                    <div className="space-y-2">
-                      <label className="text-[9.5px] font-mono text-slate-500 uppercase block font-bold">Manual Timer (Seconds)</label>
-                      <input
-                        type="number"
-                        placeholder="e.g. 45"
-                        value={diceManualTimer || ''}
-                        onChange={(e) => setDiceManualTimer(e.target.value ? Number(e.target.value) : null)}
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl font-mono text-xs font-bold text-slate-800"
-                      />
-                      <div className="flex flex-wrap gap-1">
-                        {[15, 30, 45, 60, 90].map((t) => (
-                          <button
-                            key={t}
-                            type="button"
-                            onClick={() => setDiceManualTimer(t)}
-                            className="px-2.5 py-1 text-[10px] font-bold bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
-                          >
-                            {t}s
-                          </button>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => setDiceManualTimer(null)}
-                          className="px-2.5 py-1 text-[10px] font-bold bg-rose-50 border border-rose-200 text-rose-600 rounded-lg hover:bg-rose-100 cursor-pointer"
-                        >
-                          Reset Default
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 2. WINNING NUMBER / OUTCOME SELECTION */}
-                  <div className="bg-slate-50/75 p-5 rounded-2xl border border-slate-200/80 space-y-4">
-                    <div className="flex items-center gap-2 text-slate-800 font-extrabold text-sm uppercase tracking-wider font-mono">
-                      <span>🏆</span> 2. Winning Number Selection
-                    </div>
-                    <p className="text-[10.5px] text-slate-500 leading-relaxed">
-                      Rig the active dice round results. Force a guaranteed Win/Loss or specify an exact sum (3 to 18) to be rolled.
-                    </p>
-                    <div className="space-y-3">
-                      <label className="text-[9.5px] font-mono text-slate-500 uppercase block font-bold">Selected Rig Outcome</label>
-                      <select
-                        value={diceManualResult || 'random'}
-                        onChange={(e) => setDiceManualResult(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-xs text-slate-800 cursor-pointer focus:outline-none focus:ring-1 focus:ring-red-500"
-                      >
-                        <option value="random">🎲 Standard Random (Fair Play)</option>
-                        <option value="win">👑 Force Win (Rigged Win)</option>
-                        <option value="lose">❌ Force Loss (Rigged Loss)</option>
-                        {['3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18'].map(num => (
-                          <option key={num} value={num}>Guaranteed Sum: {num}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* 3. PROFIT / MULTIPLIER SELECTION */}
-                  <div className="bg-slate-50/75 p-5 rounded-2xl border border-slate-200/80 space-y-4">
-                    <div className="flex items-center gap-2 text-slate-800 font-extrabold text-sm uppercase tracking-wider font-mono">
-                      <span>💰</span> 3. Profit Rate Selection
-                    </div>
-                    <p className="text-[10.5px] text-slate-500 leading-relaxed">
-                      Adjust the multiplier payout rate for the active game round. Users receive this multiplier times their winning stake.
-                    </p>
-                    <div className="space-y-2">
-                      <label className="text-[9.5px] font-mono text-slate-500 uppercase block font-bold">Profit Multiplier Rate</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="e.g. 1.95"
-                        value={diceManualProfitRate || ''}
-                        onChange={(e) => setDiceManualProfitRate(e.target.value ? Number(e.target.value) : null)}
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl font-mono text-xs font-bold text-slate-800"
-                      />
-                      <div className="flex flex-wrap gap-1">
-                        {[1.80, 1.90, 1.95, 2.00, 2.20].map((rate) => (
-                          <button
-                            key={rate}
-                            type="button"
-                            onClick={() => setDiceManualProfitRate(rate)}
-                            className="px-2.5 py-1 text-[10px] font-bold bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
-                          >
-                            {rate.toFixed(2)}x
-                          </button>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => setDiceManualProfitRate(null)}
-                          className="px-2.5 py-1 text-[10px] font-bold bg-rose-50 border border-rose-200 text-rose-600 rounded-lg hover:bg-rose-100 cursor-pointer"
-                        >
-                          Reset Default
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-
-                <div className="mt-8 border-t border-slate-100 pt-6 flex justify-end">
-                  <button
-                    onClick={async () => {
-                      try {
-                        await adminUpdateDiceManualFields({
-                          manualResult: diceManualResult === 'random' ? null : diceManualResult,
-                          manualTimer: diceManualTimer,
-                          manualProfitRate: diceManualProfitRate
-                        });
-                        alert('🎲 SUCCESS!\n\nManual Dice parameters deployed live successfully to all gaming cabinets.');
-                      } catch (err: any) {
-                        alert(`Error saving configurations: ${err.message}`);
-                      }
-                    }}
-                    className="px-8 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-extrabold uppercase text-xs tracking-wider rounded-xl shadow-lg shadow-red-500/10 cursor-pointer transition-all"
-                  >
-                    🚀 Save & Deploy parameters live
-                  </button>
-                </div>
-              </div>
+              <GlobalDiceController />
             </div>
           )}
 
@@ -2131,7 +1713,7 @@ export const AdminPanel: React.FC = () => {
                                 <span className="text-[10px] text-slate-400 font-mono">{player.phone || 'No phone'}</span>
                               </td>
                               <td className="py-3.5 px-4 font-mono font-bold text-emerald-600">
-                                ₹{(player.balance ?? 0).toLocaleString('en-IN')}
+                                ${(player.balance ?? 0).toLocaleString('en-US')}
                               </td>
                               <td className="py-3.5 px-4 text-slate-400">
                                 {new Date(player.createdAt || Date.now()).toLocaleDateString()}
@@ -2450,7 +2032,7 @@ export const AdminPanel: React.FC = () => {
                 <form onSubmit={handleBalanceAdjust} className="space-y-4">
                   <div className="space-y-1">
                     <label className="text-[9.5px] font-mono text-slate-500 uppercase block font-bold">
-                      Override Ledger balance adjustment (INR ₹)
+                      Override Ledger balance adjustment (USD $)
                     </label>
                     <input
                       type="number"
@@ -2638,7 +2220,7 @@ export const AdminPanel: React.FC = () => {
                               </div>
                               <div className="text-right">
                                 <span className={`font-bold block ${isAdd ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                  {isAdd ? '+' : '-'}₹{(t.amount ?? 0).toLocaleString('en-IN')}
+                                  {isAdd ? '+' : '-'}${(t.amount ?? 0).toLocaleString('en-US')}
                                 </span>
                                 <span className="text-[9px] text-slate-400 block capitalize">{t.status}</span>
                               </div>

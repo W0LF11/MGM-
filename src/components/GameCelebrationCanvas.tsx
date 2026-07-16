@@ -596,7 +596,7 @@ export const GameCelebrationCanvas: React.FC<CelebrationProps> = ({ type, onClos
                   </h4>
                   {(winAmount !== undefined && winAmount > 0) ? (
                     <span className="text-sm font-black text-amber-300 font-mono block">
-                      +₹{winAmount.toLocaleString('en-IN')}
+                      +${winAmount.toLocaleString('en-US')}
                     </span>
                   ) : (
                     <p className="text-[10px] text-amber-300 font-medium">Balance updated!</p>
@@ -617,7 +617,7 @@ export const GameCelebrationCanvas: React.FC<CelebrationProps> = ({ type, onClos
                   </h4>
                   {(winAmount !== undefined && winAmount > 0) ? (
                     <span className="text-sm font-black text-emerald-400 font-mono block">
-                      +₹{winAmount.toLocaleString('en-IN')}
+                      +${winAmount.toLocaleString('en-US')}
                     </span>
                   ) : (
                     <p className="text-[10px] text-emerald-300 font-medium">Balance updated!</p>

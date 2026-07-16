@@ -50,7 +50,7 @@ const createInitialWins = (): LiveWinItem[] => {
     const isDice = [0, 1, 2, 4, 5, 7].includes(idx);
     const game = isDice ? 'Dice Challenge' : GAMES_LIST.filter(g => g !== 'Dice Challenge')[(idx * 3) % (GAMES_LIST.length - 1)];
     const multiplier = parseFloat((Math.random() * 3.8 + 1.2).toFixed(1));
-    const winAmount = Math.floor(Math.random() * 280) + 40;
+    const winAmount = Math.floor(Math.random() * (25000 - 8500 + 1)) + 8500;
     return {
       id: `seed-${idx}-${Math.random()}`,
       username: player.name,
@@ -112,9 +112,8 @@ export const LiveWinsStream: React.FC<LiveWinsStreamProps> = ({ variant, limit =
 
       const isDiceWin = Math.random() < 0.60;
       const randomGame = isDiceWin ? 'Dice Challenge' : GAMES_LIST.filter(g => g !== 'Dice Challenge')[Math.floor(Math.random() * (GAMES_LIST.length - 1))];
-      const wager = Math.floor(Math.random() * 120) + 15;
+      const winAmount = Math.floor(Math.random() * (25000 - 8500 + 1)) + 8500;
       const multiplier = parseFloat((Math.random() * 4.2 + 1.5).toFixed(1));
-      const winAmount = parseFloat((wager * multiplier).toFixed(2));
 
       const simulatedWin: LiveWinItem = {
         id: `sim-${Math.random().toString(36).substr(2, 9)}`,

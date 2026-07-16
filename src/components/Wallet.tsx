@@ -15,7 +15,8 @@ import {
   Coins,
   Lock,
   Gift,
-  Wallet as WalletIcon
+  Wallet as WalletIcon,
+  MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -25,7 +26,9 @@ export const Wallet: React.FC = () => {
     transactions, 
     requests,
     requestDeposit, 
-    requestWithdrawal
+    requestWithdrawal,
+    addMessageToTicket,
+    addLocalNotification
   } = usePlatform();
 
   // Calculate total pending withdrawals for the current user to enforce available balance locks
@@ -37,6 +40,89 @@ export const Wallet: React.FC = () => {
 
   // Selected tab for transaction section
   const [activeFormTab, setActiveFormTab] = useState<'deposit' | 'withdraw'>('deposit');
+
+  // Loan Form State
+  const [loanAmount, setLoanAmount] = useState<string>('500');
+  const [isSubmittingLoan, setIsSubmittingLoan] = useState<boolean>(false);
+
+  const handleConnectDepositSupport = async () => {
+    if (!currentUser) return;
+    try {
+      const ticketId = `CHAT_${currentUser.id}`;
+      const msg = `I want to make a deposit. Please connect me with a deposit executive to assist with my deposit.`;
+      
+      await addMessageToTicket(ticketId, msg, 'user');
+      
+      if (addLocalNotification) {
+        addLocalNotification(
+          'Connecting to Support',
+          'Redirecting to MGM Live Support to assist with your deposit...',
+          'support'
+        );
+      }
+      
+      window.dispatchEvent(new CustomEvent('switch-tab', { detail: { tab: 'support' } }));
+    } catch (err) {
+      console.error(err);
+      window.dispatchEvent(new CustomEvent('switch-tab', { detail: { tab: 'support' } }));
+    }
+  };
+
+  const handleApplyLoan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+
+    const amount = parseFloat(loanAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert('Please enter a valid loan amount.');
+      return;
+    }
+
+    setIsSubmittingLoan(true);
+    try {
+      const ticketId = `CHAT_${currentUser.id}`;
+      const loanMessage = `I want a loan.
+      
+[MGM Macau Live Loan Application]
+• Requested Amount: $${amount.toLocaleString('en-US')}
+• Account Username: ${currentUser.username}
+
+Please connect me with a direct support agent to finalize the instant approval process.`;
+
+      // Add user message to the direct chat ticket
+      await addMessageToTicket(ticketId, loanMessage, 'user');
+
+      // Add a support message explaining the verification
+      setTimeout(async () => {
+        try {
+          await addMessageToTicket(
+            ticketId, 
+            `Hello ${currentUser.username}! I have received your request for a $${amount.toLocaleString('en-US')} gaming loan. Let me verify your account history and process this for you right away!`, 
+            'support'
+          );
+        } catch (err) {
+          console.error(err);
+        }
+      }, 1000);
+
+      // Trigger local success notification
+      if (addLocalNotification) {
+        addLocalNotification(
+          'Loan Request Sent',
+          `Your loan application for $${amount} has been successfully sent. Redirecting to chat support...`,
+          'support'
+        );
+      }
+
+      // Switch to support tab
+      window.dispatchEvent(new CustomEvent('switch-tab', { detail: { tab: 'support' } }));
+    } catch (err) {
+      console.error('Error applying for loan:', err);
+      alert('Failed to submit loan application. Please try again or open direct support.');
+    } finally {
+      setIsSubmittingLoan(false);
+    }
+  };
 
   // Deposit Form State
   const [depAmount, setDepAmount] = useState<string>('');
@@ -155,7 +241,7 @@ export const Wallet: React.FC = () => {
       return;
     }
     if (amt > availableBalance) {
-      alert(`Insufficient available wallet balance! Your available balance is ₹${availableBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}, because you have ₹${pendingWithdrawalTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })} locked in pending withdrawals.`);
+      alert(`Insufficient available wallet balance! Your available balance is $${availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}, because you have $${pendingWithdrawalTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })} locked in pending withdrawals.`);
       return;
     }
 
@@ -456,13 +542,23 @@ export const Wallet: React.FC = () => {
                 transition={{ duration: 0.15 }}
                 className="space-y-6"
               >
-                <div>
-                  <h3 className="text-sm font-black font-mono text-white uppercase tracking-wider">
-                    Initiate Deposit Verification
-                  </h3>
-                  <p className="text-[11px] text-slate-500 font-mono mt-1">
-                    Enter the amount you sent and upload your transaction receipt.
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/50 border border-slate-800 p-4 rounded-2xl">
+                  <div className="space-y-1">
+                    <h3 className="text-xs font-black font-mono text-white uppercase tracking-wider">
+                      Initiate Deposit Verification
+                    </h3>
+                    <p className="text-[11px] text-slate-400 font-mono">
+                      Enter the amount you sent and upload your transaction receipt. Need live help?
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleConnectDepositSupport}
+                    className="px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-mono font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    Live Deposit Chat
+                  </button>
                 </div>
 
                 {depSuccessMessage && (
@@ -721,55 +817,108 @@ export const Wallet: React.FC = () => {
         </div>
       </div>
 
-      {/* Commercial Terms & Regulatory Conditions Section in Chinese (with MGM and VIP in English) */}
-      <div className="rounded-3xl bg-slate-950/90 border border-amber-500/20 p-8 space-y-6 shadow-2xl relative overflow-hidden" id="commercial-terms-regulatory">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+      {/* 4. PREMIUM MGM LOAN & CREDIT FACILITY SECTION */}
+      <div className="rounded-3xl bg-slate-950 border border-slate-800/80 p-6 md:p-8 space-y-6 shadow-2xl relative" id="loan-availability-section">
+        <div className="absolute inset-0 bg-radial-gradient from-amber-500/5 to-transparent blur-3xl pointer-events-none" />
         
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-850">
-          <div className="space-y-1">
-            <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest font-black block">MGM 监管框架</span>
-            <h2 className="text-2xl md:text-3xl font-sans font-black text-slate-100 tracking-tight">
-              商业条款与监管规定
-            </h2>
-          </div>
-          <div className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-mono uppercase tracking-widest self-start md:self-auto">
-            官方指南
-          </div>
-        </div>
+        <div className="flex flex-col md:flex-row gap-6 justify-between relative z-10">
+          
+          {/* Left Side: Loan Form */}
+          <div className="flex-1 space-y-4">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[9px] font-mono tracking-widest text-amber-400 uppercase font-bold">
+                👑 MGM Live Credit Line
+              </div>
+              <h3 className="text-base font-black font-mono text-white uppercase tracking-wider mt-1">
+                Instant MGM Gaming Loans
+              </h3>
+              <p className="text-[11px] text-slate-400 font-mono">
+                Need extra balance to play? Request an instant MGM direct interest-free loan credited straight to your gaming wallet.
+              </p>
+            </div>
 
-        <p className="text-sm text-slate-300 leading-relaxed font-sans">
-          欢迎使用澳门美高梅（<span className="text-amber-400 font-bold">MGM</span>）高端博彩平台。在访问个人用户控制面板时，即视为您确认并同意遵守以下既定的安全商业准则：
-        </p>
+            <form onSubmit={handleApplyLoan} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-mono uppercase font-bold text-slate-400 tracking-wider">
+                  How much would you like to borrow? ($)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-slate-400 font-bold text-xs">$</span>
+                  <input
+                    type="number"
+                    required
+                    min="50"
+                    max="10000"
+                    value={loanAmount}
+                    onChange={(e) => setLoanAmount(e.target.value)}
+                    className="w-full pl-7 pr-3 py-2 bg-slate-900 rounded-xl border border-slate-800 text-white font-mono text-xs focus:outline-none focus:border-amber-500/50 transition-all"
+                  />
+                </div>
+                <span className="text-[9px] text-slate-500 font-mono block">
+                  Recommended range: $50 - $5,000 based on standard VIP standing.
+                </span>
+              </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-          <div className="p-5 rounded-2xl bg-slate-900/30 border border-slate-850/60 space-y-3">
-            <h3 className="text-base font-bold text-amber-400 flex items-center gap-2">
-              <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-amber-500/10 text-[11px] font-mono font-black">1</span>
-              <span className="font-sans">VIP 权限与准入机制</span>
-            </h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              执行委员会保留最终决定权，可锁定系统游戏、重新设定 RTP（玩家回报率）指标，以及调整 <span className="text-amber-400 font-bold">VIP</span> 权限。受限 <span className="text-amber-400 font-bold">VIP</span> 系统需具备特定的账户准入资格。
-            </p>
+              <button
+                type="submit"
+                disabled={isSubmittingLoan || !loanAmount || parseFloat(loanAmount) <= 0}
+                className="w-full py-3 bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 disabled:from-slate-900 disabled:to-slate-900 disabled:text-slate-500 disabled:opacity-40 rounded-xl text-xs font-black transition-all shadow-lg text-slate-950 flex items-center justify-center gap-1.5 uppercase tracking-widest font-mono cursor-pointer"
+              >
+                {isSubmittingLoan ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3 w-3 border-2 border-slate-950 border-t-transparent shrink-0" />
+                    Connecting to MGM Support...
+                  </>
+                ) : (
+                  <>
+                    Apply Now & Chat With Manager
+                  </>
+                )}
+              </button>
+
+              <p className="text-[9px] text-slate-500 font-mono text-center">
+                🔒 Clicking apply will securely connect you with our live direct chat support manager.
+              </p>
+            </form>
           </div>
 
-          <div className="p-5 rounded-2xl bg-slate-900/30 border border-slate-850/60 space-y-3">
-            <h3 className="text-base font-bold text-amber-400 flex items-center gap-2">
-              <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-amber-500/10 text-[11px] font-mono font-black">2</span>
-              <span className="font-sans">财务结算限额</span>
-            </h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              所有模拟存款、奖金及账面余额均严格绑定于当前本地工作区配置。账目数据每小时进行一次结算核查，且不涉及任何外部债务责任。
-            </p>
-          </div>
-        </div>
+          {/* Right Side: Social Proof / Recent Approved Loans */}
+          <div className="w-full md:w-80 bg-slate-900/45 border border-slate-800 p-4 rounded-2xl flex flex-col space-y-3">
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <h4 className="text-[10px] font-black font-mono text-slate-300 uppercase tracking-wider">
+                Live Approved Loans Feed
+              </h4>
+            </div>
 
-        <div className="pt-4 border-t border-slate-850 flex gap-3">
-          <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 self-start text-amber-400">
-            <AlertTriangle className="h-4 w-4" />
+            <div className="space-y-2.5 max-h-[180px] overflow-y-auto no-scrollbar">
+              {[
+                { username: "MGM_Player88", amount: 1500, time: "2m ago" },
+                { username: "VIP_Macau77", amount: 2500, time: "14m ago" },
+                { username: "GoldenDragon", amount: 500, time: "38m ago" },
+                { username: "HighRollerPro", amount: 4000, time: "1h ago" },
+                { username: "JackpotWinner", amount: 1000, time: "2h ago" }
+              ].map((loan, idx) => (
+                <div key={idx} className="flex items-center justify-between text-[11px] font-mono border-b border-slate-850/50 pb-2 last:border-0 last:pb-0">
+                  <div className="space-y-0.5">
+                    <span className="text-slate-300 font-bold block">{loan.username}</span>
+                    <span className="text-[9px] text-slate-500">{loan.time}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-emerald-400 font-black">${loan.amount.toLocaleString()}.00</span>
+                    <span className="text-[8px] text-emerald-500/80 block uppercase font-bold tracking-wider">Approved</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-1.5 border-t border-slate-800 text-center">
+              <span className="text-[8px] text-slate-500 font-mono uppercase tracking-wider">
+                Authorized Macau Escrow License
+              </span>
+            </div>
           </div>
-          <p className="text-[11px] text-slate-500 leading-relaxed font-mono">
-            法律声明：对上述安全准则的访问仅限于经身份验证的本地用户会话，以确保机密性规定不向公众披露。
-          </p>
+
         </div>
       </div>
 

@@ -122,6 +122,13 @@ export interface Game {
   manualResult?: string;
   manualTimer?: number;
   manualProfitRate?: number;
+  globalDiceOverrides?: Record<string, {
+    outcome: 'win' | 'lose' | 'random';
+    target?: string;
+    winPct?: number;
+    lossPct?: number;
+    isRepeating?: boolean;
+  }>;
 }
 
 export interface BetRecord {
