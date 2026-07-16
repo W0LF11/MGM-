@@ -259,23 +259,6 @@ export const Support: React.FC = () => {
                 >
                   <Search className="h-3.5 w-3.5" />
                 </button>
-
-                {activeTicket.status !== 'resolved' ? (
-                  <button
-                    onClick={() => resolveTicket(activeTicket.id)}
-                    className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/20 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm"
-                    id="btn-resolve-ticket"
-                  >
-                    Close Session
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleReopenChat}
-                    className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white border border-emerald-500/20 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
-                  >
-                    <RotateCcw className="h-3 w-3" /> Reopen Chat
-                  </button>
-                )}
               </div>
             </div>
 

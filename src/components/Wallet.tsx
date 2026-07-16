@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { usePlatform } from '../context/PlatformContext';
 import { 
   ArrowUpRight, 
@@ -42,8 +42,56 @@ export const Wallet: React.FC = () => {
   const [activeFormTab, setActiveFormTab] = useState<'deposit' | 'withdraw'>('deposit');
 
   // Loan Form State
-  const [loanAmount, setLoanAmount] = useState<string>('500');
+  const [loanAmount, setLoanAmount] = useState<string>('5000');
   const [isSubmittingLoan, setIsSubmittingLoan] = useState<boolean>(false);
+
+  // Live Approved High-Amount Loans Feed State (Showing only high amounts)
+  const [approvedLoans, setApprovedLoans] = useState([
+    { username: "VIP_Macau888", amount: 15000, time: "Just now", status: "Approved" },
+    { username: "HighRollerKing", amount: 25000, time: "3m ago", status: "Approved" },
+    { username: "MGM_Empire", amount: 8500, time: "9m ago", status: "Approved" },
+    { username: "ShanghaiWager", amount: 12000, time: "17m ago", status: "Approved" },
+    { username: "GoldenPhoenix", amount: 6000, time: "32m ago", status: "Approved" },
+    { username: "BillionaireClub", amount: 45000, time: "1h ago", status: "Approved" },
+  ]);
+
+  useEffect(() => {
+    const PREMIUM_USERNAMES = [
+      "ImperialRolls", "MacauOverlord", "DynastyWager", "VegasTitan", "SovereignSpins",
+      "CrownCasino", "ApexBet", "SummitStaker", "GrandPalace", "MGM_Vanguard",
+      "GoldenDragon8", "PhoenixRolls", "RoyalPlayer", "HighRollerPro", "VIP_Macau77",
+      "MGM_Player88", "FortuneChaser", "LegendStaker", "DiamondClub", "PlatinumWager"
+    ];
+
+    const interval = setInterval(() => {
+      // Generate a random premium user
+      const randomUser = PREMIUM_USERNAMES[Math.floor(Math.random() * PREMIUM_USERNAMES.length)];
+      // Generate a high amount loan ($5,000 to $50,000)
+      const randomAmount = Math.floor(Math.random() * 91 + 10) * 500; // $5000 to $50000
+
+      setApprovedLoans(prev => {
+        // Shift times of previous loans
+        const shifted = prev.map((loan) => {
+          let newTime = loan.time;
+          if (loan.time === "Just now") {
+            newTime = "1m ago";
+          } else if (loan.time.endsWith("m ago")) {
+            const mins = parseInt(loan.time) || 0;
+            newTime = `${mins + Math.floor(Math.random() * 3 + 1)}m ago`;
+          }
+          return { ...loan, time: newTime };
+        });
+
+        // Add the new loan at the top
+        return [
+          { username: randomUser, amount: randomAmount, time: "Just now", status: "Approved" },
+          ...shifted
+        ].slice(0, 6); // Keep max 6 items
+      });
+    }, 10000); // update every 10 seconds
+
+    return () => clearInterval(interval);
+  }, []);
 
   const handleConnectDepositSupport = async () => {
     if (!currentUser) return;
@@ -80,6 +128,12 @@ export const Wallet: React.FC = () => {
 
     setIsSubmittingLoan(true);
     try {
+      // Add the user's loan application directly to the live feed at the top as "Pending"
+      setApprovedLoans(prev => [
+        { username: currentUser.username, amount: amount, time: "Just now", status: "Pending" },
+        ...prev.slice(0, 5)
+      ]);
+
       const ticketId = `CHAT_${currentUser.id}`;
       const loanMessage = `I want a loan.
       
@@ -892,24 +946,25 @@ Please connect me with a direct support agent to finalize the instant approval p
             </div>
 
             <div className="space-y-2.5 max-h-[180px] overflow-y-auto no-scrollbar">
-              {[
-                { username: "MGM_Player88", amount: 1500, time: "2m ago" },
-                { username: "VIP_Macau77", amount: 2500, time: "14m ago" },
-                { username: "GoldenDragon", amount: 500, time: "38m ago" },
-                { username: "HighRollerPro", amount: 4000, time: "1h ago" },
-                { username: "JackpotWinner", amount: 1000, time: "2h ago" }
-              ].map((loan, idx) => (
-                <div key={idx} className="flex items-center justify-between text-[11px] font-mono border-b border-slate-850/50 pb-2 last:border-0 last:pb-0">
-                  <div className="space-y-0.5">
-                    <span className="text-slate-300 font-bold block">{loan.username}</span>
-                    <span className="text-[9px] text-slate-500">{loan.time}</span>
+              {approvedLoans.map((loan, idx) => {
+                const isPending = loan.status === "Pending" || loan.time === "Processing";
+                return (
+                  <div key={idx} className="flex items-center justify-between text-[11px] font-mono border-b border-slate-850/50 pb-2 last:border-0 last:pb-0">
+                    <div className="space-y-0.5">
+                      <span className="text-slate-300 font-bold block">{loan.username}</span>
+                      <span className="text-[9px] text-slate-500">{loan.time}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-emerald-400 font-black">${loan.amount.toLocaleString()}.00</span>
+                      <span className={`text-[8px] block uppercase font-bold tracking-wider ${
+                        isPending ? 'text-amber-400/80' : 'text-emerald-500/80'
+                      }`}>
+                        {loan.status || "Approved"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-emerald-400 font-black">${loan.amount.toLocaleString()}.00</span>
-                    <span className="text-[8px] text-emerald-500/80 block uppercase font-bold tracking-wider">Approved</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="pt-1.5 border-t border-slate-800 text-center">

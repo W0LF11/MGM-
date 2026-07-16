@@ -55,8 +55,12 @@ export const History: React.FC<HistoryProps> = ({ initialSubTab, onSubTabChange 
   }
 
   // Filters for current user
-  const myBets = bets.filter(b => b.userId === currentUser.id);
-  const myTx = transactions.filter(t => t.userId === currentUser.id);
+  const myBets = bets
+    .filter(b => b.userId === currentUser.id)
+    .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+  const myTx = transactions
+    .filter(t => t.userId === currentUser.id)
+    .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
   const myReferred = users.filter(u => u.referredBy === currentUser.id);
   const mySessions = loginSessions.filter(s => !s.userId || s.userId === currentUser.id);
   const myNotifications = notifications.filter(n => !n.userId || n.userId === currentUser.id);

@@ -506,7 +506,9 @@ Would you like me to guide you through our secure payment channels to secure thi
   const avatarList = ['🦁', '🦊', '🐼', '🐨', '🐸', '🦄', '🐝', '💎', '🍀', '👑', '👽', '💀'];
 
   // Dynamic gaming analytics calculations
-  const userBets = bets.filter(b => b.userId === currentUser?.id);
+  const userBets = bets
+    .filter(b => b.userId === currentUser?.id)
+    .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
   const lastPlayedGame = userBets.length > 0 ? userBets[0] : null;
 
   // Group bets by gameId to find the most played game

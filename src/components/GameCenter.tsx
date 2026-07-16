@@ -634,12 +634,10 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
             const pct = activeSlotOverride.winPct !== undefined ? activeSlotOverride.winPct : 96;
             totalWin = totalWager + (totalWager * (pct / 100));
           } else if (activeSlotOverride.outcome === 'lose') {
-            const pct = activeSlotOverride.lossPct !== undefined ? activeSlotOverride.lossPct : 100;
-            totalWin = totalWager * ((100 - pct) / 100);
+            totalWin = 0;
           }
         } else if (isUserRiggingActive) {
           const customWinPct = latestUser?.nextDiceWinPercentage;
-          const customLossPct = latestUser?.nextDiceLossPercentage;
 
           let actuallyWonAny = false;
           choices.forEach(choice => {
@@ -654,20 +652,25 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
 
           if (actuallyWonAny) {
             if (customWinPct !== undefined && customWinPct !== null) {
-              totalWin = totalWager * (customWinPct / 100);
+              if (customWinPct < 100) {
+                totalWin = totalWager + (totalWager * (customWinPct / 100));
+              } else {
+                totalWin = totalWager * (customWinPct / 100);
+              }
             }
           } else {
-            if (customLossPct !== undefined && customLossPct !== null) {
-              totalWin = totalWager * ((100 - customLossPct) / 100);
-            }
+            totalWin = 0;
           }
         } else if (activeGlobalOverride && activeGlobalOverride.outcome !== 'random') {
           if (activeGlobalOverride.outcome === 'win') {
             const pct = activeGlobalOverride.winPct !== undefined ? activeGlobalOverride.winPct : 100;
-            totalWin = totalWager * (pct / 100);
+            if (pct < 100) {
+              totalWin = totalWager + (totalWager * (pct / 100));
+            } else {
+              totalWin = totalWager * (pct / 100);
+            }
           } else if (activeGlobalOverride.outcome === 'lose') {
-            const pct = activeGlobalOverride.lossPct !== undefined ? activeGlobalOverride.lossPct : 100;
-            totalWin = totalWager * ((100 - pct) / 100);
+            totalWin = 0;
           }
         }
 
