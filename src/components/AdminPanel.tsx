@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { usePlatform } from '../context/PlatformContext';
-import { DiceSchedule } from '../types';
+import { DiceSchedule, SupportTicket } from '../types';
 import { DiceController } from './DiceController';
 import { GlobalDiceController } from './GlobalDiceController';
 import { 
@@ -391,6 +391,7 @@ export const AdminPanel: React.FC = () => {
 
   // Support ticket replies state
   const [activeTicketId, setActiveTicketId] = useState<string>('');
+  const [supportSearch, setSupportSearch] = useState('');
   const [adminReplyText, setAdminReplyText] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -940,29 +941,31 @@ export const AdminPanel: React.FC = () => {
           </div>
 
           {/* Executive statistics card grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            
-            <div className="p-5 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">Total Users</span>
-              <span className="text-2xl font-black text-slate-900 mt-1 font-mono">{displayTotalUsers}</span>
-            </div>
+          {activeTab !== 'support' && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              
+              <div className="p-5 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">Total Users</span>
+                <span className="text-2xl font-black text-slate-900 mt-1 font-mono">{displayTotalUsers}</span>
+              </div>
 
-            <div className="p-5 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">Total Commission</span>
-              <span className="text-2xl font-black text-emerald-600 mt-1 font-mono">${(displayTotalCommission ?? 0).toLocaleString('en-US')}</span>
-            </div>
+              <div className="p-5 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">Total Commission</span>
+                <span className="text-2xl font-black text-emerald-600 mt-1 font-mono">${(displayTotalCommission ?? 0).toLocaleString('en-US')}</span>
+              </div>
 
-            <div className="p-5 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">Total Withdraws</span>
-              <span className="text-2xl font-black text-rose-600 mt-1 font-mono">${(displayTotalWithdraws ?? 0).toLocaleString('en-US')}</span>
-            </div>
+              <div className="p-5 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">Total Withdraws</span>
+                <span className="text-2xl font-black text-rose-600 mt-1 font-mono">${(displayTotalWithdraws ?? 0).toLocaleString('en-US')}</span>
+              </div>
 
-            <div className="p-5 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">Active Requests</span>
-              <span className="text-2xl font-black text-amber-600 mt-1 font-mono">{displayActiveRequests}</span>
-            </div>
+              <div className="p-5 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">Active Requests</span>
+                <span className="text-2xl font-black text-amber-600 mt-1 font-mono">{displayActiveRequests}</span>
+              </div>
 
-          </div>
+            </div>
+          )}
 
           {/* MAIN TAB CONTENT VIEW */}
           
@@ -1489,47 +1492,188 @@ export const AdminPanel: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 {/* Tickets column */}
-                <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
-                  {tickets.length === 0 ? (
-                    <div className="text-center py-12 bg-slate-50 border border-slate-150 rounded-2xl">
-                      <p className="text-xs text-slate-400">No support tickets lodge history.</p>
-                    </div>
-                  ) : (
-                    tickets.map((t, idx) => {
-                      const isSelected = t.id === activeTicketId;
-                      const isClosed = t.status === 'resolved';
-                      return (
-                        <div
-                          key={t.id ? `${t.id}-${idx}` : idx}
-                          onClick={() => setActiveTicketId(t.id)}
-                          className={`p-4 rounded-2xl border cursor-pointer transition-all ${
-                            isSelected 
-                              ? 'bg-slate-50 border-slate-400' 
-                              : 'bg-white border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="flex justify-between items-start">
-                            <span className="text-[10px] font-mono font-black text-indigo-500">#{t.id}</span>
-                            <span className={`text-[8px] font-bold px-1.5 py-0.2 rounded border uppercase ${
-                              isClosed 
-                                ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
-                                : 'bg-rose-50 border-rose-200 text-rose-600 animate-pulse'
-                            }`}>
-                              {t.status}
-                            </span>
+                <div className="space-y-4 max-h-[700px] flex flex-col">
+                  {/* Search bar inside support tab */}
+                  <div className="relative">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by name or register number..."
+                      value={supportSearch}
+                      onChange={(e) => setSupportSearch(e.target.value)}
+                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-2xl text-xs font-semibold text-slate-800 placeholder-slate-400 transition-all outline-none"
+                    />
+                    {supportSearch && (
+                      <button
+                        onClick={() => setSupportSearch('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 font-bold text-xs"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-3 overflow-y-auto pr-1 flex-1">
+                    {(() => {
+                      // 1. Filter existing tickets
+                      const filteredTickets = tickets.filter(t => {
+                        if (!supportSearch.trim()) return true;
+                        const query = supportSearch.toLowerCase().trim();
+                        
+                        const nameMatch = t.username ? t.username.toLowerCase().includes(query) : false;
+                        const ticketIdMatch = t.id ? t.id.toLowerCase().includes(query) : false;
+                        const userIdMatch = t.userId ? t.userId.toLowerCase().includes(query) : false;
+                        const categoryMatch = t.category ? t.category.toLowerCase().includes(query) : false;
+                        
+                        const ticketUser = users.find(u => u.id === t.userId) || (t.username ? users.find(u => u.username && u.username.toLowerCase() === t.username.toLowerCase()) : undefined);
+                        const emailMatch = ticketUser?.email ? ticketUser.email.toLowerCase().includes(query) : false;
+                        
+                        return nameMatch || ticketIdMatch || userIdMatch || categoryMatch || emailMatch;
+                      });
+
+                      // 2. Synthesize virtual tickets for matching users who don't have an existing ticket
+                      const existingTicketUserIds = new Set(tickets.map(t => t.userId));
+                      const matchingUsersWithoutTicket = users.filter(u => {
+                        if (!supportSearch.trim()) return false;
+                        const query = supportSearch.toLowerCase().trim();
+                        
+                        // Already has ticket?
+                        if (existingTicketUserIds.has(u.id)) return false;
+                        const hasTicketByUsername = tickets.some(t => t.username && u.username && t.username.toLowerCase() === u.username.toLowerCase());
+                        if (hasTicketByUsername) return false;
+                        
+                        const nameMatch = u.username ? u.username.toLowerCase().includes(query) : false;
+                        const emailMatch = u.email ? u.email.toLowerCase().includes(query) : false;
+                        const idMatch = u.id ? u.id.toLowerCase().includes(query) : false;
+                        const referralMatch = u.referralCode ? u.referralCode.toLowerCase().includes(query) : false;
+                        
+                        return nameMatch || emailMatch || idMatch || referralMatch;
+                      });
+
+                      const virtualTickets = matchingUsersWithoutTicket.map(u => ({
+                        id: `CHAT_${u.id}`,
+                        userId: u.id,
+                        username: u.username,
+                        title: 'MGM Live Direct Support',
+                        category: 'other',
+                        status: 'Ready to Chat',
+                        agentName: 'Unassigned',
+                        messages: [],
+                        isVirtual: true,
+                        email: u.email
+                      }));
+
+                      const combinedList = [...filteredTickets, ...virtualTickets];
+
+                      if (combinedList.length === 0) {
+                        return (
+                          <div className="text-center py-12 bg-slate-50 border border-slate-150 rounded-2xl">
+                            <p className="text-xs text-slate-400">No matching support chats or users found.</p>
                           </div>
-                          <h4 className="text-xs font-extrabold text-slate-900 mt-1.5 truncate">{t.title}</h4>
-                          <p className="text-[9.5px] text-slate-400 font-mono mt-1">
-                            By: {t.username} • {t.category}
-                          </p>
-                        </div>
-                      );
-                    })
-                  )}
+                        );
+                      }
+
+                      return combinedList.map((t, idx) => {
+                        const isSelected = t.id === activeTicketId;
+                        const isClosed = t.status === 'resolved';
+                        const isVirtual = (t as any).isVirtual;
+                        
+                        // Find email
+                        let userEmail = 'No email available';
+                        if (isVirtual) {
+                          userEmail = (t as any).email || 'No email available';
+                        } else {
+                          const ticketUser = users.find(u => u.id === t.userId) || (t.username ? users.find(u => u.username && u.username.toLowerCase() === t.username.toLowerCase()) : undefined);
+                          userEmail = ticketUser?.email || 'No email available';
+                        }
+                        
+                        return (
+                          <div
+                            key={t.id ? `${t.id}-${idx}` : idx}
+                            onClick={async () => {
+                              if (isVirtual) {
+                                try {
+                                  const ticketId = t.id;
+                                  const ticketRef = doc(db, 'tickets', ticketId);
+                                  const agents = ['Agent Emma', 'Agent Liam', 'Supervisor Sophia', 'Analyst Dave', 'VIP Concierge Chloe'];
+                                  const randomAgent = agents[Math.floor(Math.random() * agents.length)];
+                                  const newTicket: SupportTicket = {
+                                    id: ticketId,
+                                    userId: t.userId,
+                                    username: t.username,
+                                    title: 'MGM Live Direct Support',
+                                    category: 'other',
+                                    status: 'open',
+                                    priority: 'high',
+                                    createdAt: new Date().toISOString(),
+                                    updatedAt: new Date().toISOString(),
+                                    agentName: randomAgent,
+                                    messages: [
+                                      {
+                                        id: 'WELCOME_MSG',
+                                        sender: 'support',
+                                        senderName: randomAgent,
+                                        text: `Hello ${t.username}! Welcome to MGM Macau Direct Live Support. I am your assigned support representative. How can we help you today?`,
+                                        timestamp: new Date().toISOString(),
+                                        isRead: false
+                                      }
+                                    ]
+                                  };
+                                  await setDoc(ticketRef, newTicket);
+                                  setActiveTicketId(ticketId);
+                                } catch (err) {
+                                  console.error('Error starting virtual chat:', err);
+                                }
+                              } else {
+                                setActiveTicketId(t.id);
+                              }
+                            }}
+                            className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                              isSelected 
+                                ? 'bg-indigo-50/40 border-indigo-500 shadow-sm' 
+                                : 'bg-white border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] font-mono font-black text-indigo-600">#{t.id}</span>
+                              <span className={`text-[8px] font-bold px-1.5 py-0.2 rounded border uppercase ${
+                                isVirtual
+                                  ? 'bg-amber-50 border-amber-200 text-amber-600'
+                                  : isClosed 
+                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
+                                    : 'bg-rose-50 border-rose-200 text-rose-600 animate-pulse'
+                              }`}>
+                                {isVirtual ? 'Ready to Chat' : t.status}
+                              </span>
+                            </div>
+                            
+                            {/* Highlight the name of the user prominently */}
+                            <div className="mt-2.5 mb-2 p-2 bg-indigo-50/80 border border-indigo-100 rounded-xl flex items-center gap-2">
+                              <div className="w-5.5 h-5.5 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-[10px]">
+                                {t.username ? t.username.charAt(0).toUpperCase() : 'U'}
+                              </div>
+                              <span className="text-xs font-black text-indigo-900 tracking-tight truncate">
+                                @{t.username}
+                              </span>
+                            </div>
+
+                            {/* Hide MGM Live Direct Support & live support title text */}
+                            {t.title && t.title !== 'MGM Live Direct Support' && t.title !== 'live support' && (
+                              <h4 className="text-xs font-semibold text-slate-700 truncate mb-1">{t.title}</h4>
+                            )}
+
+                            <p className="text-[10px] text-slate-400 font-mono truncate bg-slate-50 border border-slate-100 px-2 py-1.5 rounded-xl">
+                              Gmail: <span className="font-bold text-slate-600 font-sans">{userEmail}</span>
+                            </p>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
                 </div>
 
                 {/* Messages Timeline column */}
-                <div className="lg:col-span-2 bg-slate-50 rounded-3xl border border-slate-200 p-4 h-[400px] flex flex-col justify-between">
+                <div className="lg:col-span-2 bg-slate-50 rounded-3xl border border-slate-200 p-4 h-[700px] flex flex-col justify-between shadow-inner">
                   {activeTicketId ? (
                     <>
                       {(() => {
@@ -1538,11 +1682,36 @@ export const AdminPanel: React.FC = () => {
                         return (
                           <>
                             <div className="flex justify-between items-center border-b border-slate-200 pb-3">
-                              <div>
-                                <span className="text-[9px] font-mono text-indigo-500">#{activeTicket.id} Case Hub</span>
-                                <h4 className="text-xs font-black text-slate-900 uppercase">{activeTicket.title}</h4>
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-sm">
+                                  {activeTicket.username ? activeTicket.username.charAt(0).toUpperCase() : 'U'}
+                                </div>
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="text-[10px] font-mono text-indigo-500">#{activeTicket.id}</span>
+                                    <span className="text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg">
+                                      @{activeTicket.username}
+                                    </span>
+                                    {(() => {
+                                      const activeUser = users.find(u => u.id === activeTicket.userId) || (activeTicket.username ? users.find(u => u.username && u.username.toLowerCase() === activeTicket.username.toLowerCase()) : undefined);
+                                      if (activeUser?.email) {
+                                        return (
+                                          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg font-mono">
+                                            {activeUser.email}
+                                          </span>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
+                                  </div>
+                                  {activeTicket.title && activeTicket.title !== 'MGM Live Direct Support' && activeTicket.title !== 'live support' ? (
+                                    <h4 className="text-xs font-extrabold text-slate-800 uppercase mt-0.5">{activeTicket.title}</h4>
+                                  ) : (
+                                    <h4 className="text-xs font-extrabold text-slate-500 uppercase mt-0.5">Live Support Session</h4>
+                                  )}
+                                </div>
                               </div>
-                              <span className="text-[9px] text-slate-400 font-mono">Chat Auditing Panel</span>
+                              <span className="text-[9px] text-slate-400 font-mono bg-slate-100 px-2 py-1 rounded-full">Chat Auditing Panel</span>
                             </div>
 
                             {/* Timeline messages */}
@@ -1553,8 +1722,8 @@ export const AdminPanel: React.FC = () => {
                                   <div key={m.id ? `${m.id}-${idx}` : idx} className={`flex ${isSupportSender ? 'justify-end' : 'justify-start'}`}>
                                     <div className={`p-3 max-w-xs rounded-2xl border text-xs leading-relaxed ${
                                       isSupportSender
-                                        ? 'bg-indigo-600 text-white border-indigo-600 rounded-tr-none'
-                                        : 'bg-white border-slate-200 text-slate-700 rounded-tl-none'
+                                        ? 'bg-indigo-600 text-white border-indigo-600 rounded-tr-none shadow-sm'
+                                        : 'bg-white border-slate-200 text-slate-700 rounded-tl-none shadow-xs'
                                     }`}>
                                       <span className={`block text-[8px] uppercase tracking-wider mb-1 font-bold ${
                                         isSupportSender ? 'text-indigo-200' : 'text-slate-400'
@@ -1586,7 +1755,7 @@ export const AdminPanel: React.FC = () => {
                               />
                               <button
                                 type="submit"
-                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs uppercase"
+                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs uppercase cursor-pointer transition-colors"
                               >
                                 Send Reply
                               </button>

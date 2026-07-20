@@ -352,11 +352,6 @@ export const Support: React.FC = () => {
                       {/* Status/Timestamp footer */}
                       <div className={`flex items-center gap-1.5 text-[9px] text-slate-400/80 font-mono mt-0.5 px-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                         <span>{new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        {isMe && (
-                          <span className="text-emerald-500 flex items-center gap-0.5 font-bold">
-                            <CheckCheck className="h-3 w-3" /> Read
-                          </span>
-                        )}
                       </div>
                     </div>
 
