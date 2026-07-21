@@ -154,6 +154,7 @@ export interface SupportMessage {
   fileUrl?: string;
   fileName?: string;
   isRead: boolean;
+  isAuto?: boolean;
 }
 
 export interface SupportTicket {
@@ -172,6 +173,8 @@ export interface SupportTicket {
   rating?: number;
   feedback?: string;
   agentName?: string;
+  takenByAdmin?: boolean;
+  adminReplied?: boolean;
 }
 
 export interface Announcement {

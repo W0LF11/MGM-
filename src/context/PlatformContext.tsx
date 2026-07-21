@@ -921,7 +921,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         gateway: method,
         date: formatDate(),
         details: address,
-        creditScore: currentUser.balance > 1000 ? 99 : 95
+        creditScore: currentUser.balance > 1000 ? 99 : 95,
+        isDeducted: true
       };
 
       // Query total pending withdrawals to calculate available balance (using simple single-field query to avoid composite indexes)
@@ -933,7 +934,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       let pendingTotal = 0;
       snap.forEach((dDoc) => {
         const d = dDoc.data();
-        if (d.type === 'withdrawal' && d.status === 'pending') {
+        if (d.type === 'withdrawal' && d.status === 'pending' && !d.isDeducted) {
           pendingTotal += d.amount || 0;
         }
       });
@@ -950,7 +951,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           throw new Error(`Insufficient available balance! Balance: $${userData.balance.toFixed(2)}, Pending: $${pendingTotal.toFixed(2)}, Available: $${availableBalance.toFixed(2)}`);
         }
 
-        // Just write the pending request - DO NOT DEDUCT the balance yet!
+        // Deduct the withdrawal amount immediately upon request submission so funds are locked
+        const newBalance = parseFloat((userData.balance - amount).toFixed(2));
+        tx.update(uRef, { balance: newBalance });
         tx.set(doc(db, 'requests', reqId), newRequest);
         return true;
       });
@@ -1273,7 +1276,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               senderName: randomAgent,
               text,
               timestamp: formatDate(),
-              isRead: false
+              isRead: false,
+              isAuto: true
             };
             await updateDoc(doc(db, 'tickets', ticketId), {
               messages: [...data.messages, newAgentMsg],
@@ -1319,7 +1323,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 senderName: randomAgent,
                 text: `Hello ${currentUser.username}! Welcome to MGM Macau Direct Live Support. I am your assigned support representative. How can we help you today?`,
                 timestamp: formatDate(),
-                isRead: false
+                isRead: false,
+                isAuto: true
               }
             ]
           };
@@ -1347,15 +1352,19 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await updateDoc(ticketRef, {
         messages: updatedMessages,
         updatedAt: formatDate(),
-        status: sender === 'support' ? 'assigned' : tData.status
+        status: sender === 'support' ? 'assigned' : tData.status,
+        ...(sender === 'support' ? { adminReplied: true, takenByAdmin: true } : {})
       });
 
       if (sender === 'support' && currentUser && tData.userId === currentUser.id) {
         addLocalNotification('New Support Reply', `A representative has replied to conversation #${ticketId}.`, 'support');
       }
 
-      // Simulate Auto support officer replies for player texts
-      if (sender === 'user' && tData.status !== 'resolved') {
+      // Simulate Auto support officer replies for player texts (only if not taken/replied by admin)
+      const hasAdminMessaged = (tData.messages || []).some(m => m.sender === 'support' && !m.isAuto);
+      const isClaimedByAdmin = tData.takenByAdmin || tData.adminReplied || hasAdminMessaged;
+
+      if (sender === 'user' && tData.status !== 'resolved' && !isClaimedByAdmin) {
         let reply = `We have assigned a support officer to your conversation, and they will shortly reply to your chat. Please stand by.`;
         
         if (ticketId.startsWith('CHAT_')) {
@@ -1363,7 +1372,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           if (userMessagesCount === 1) {
             const displayName = currentUser?.username || 'Valued Player';
             reply = `Hi ${displayName}! Welcome to MGM 澳門美高梅 Direct Live Support. 🌟
-
+ 
 To ensure we assist you as efficiently as possible, please confirm or provide your details:
 • 👤 **Username**: ${currentUser?.username || 'Please type your preferred username'}
 • 📱 **Phone Number**: ${currentUser?.phone || 'Please type your active phone number'}
@@ -1383,14 +1392,18 @@ We have assigned you a dedicated chat support agent and he will shortly reply to
               const latestSnap = await getDoc(ticketRef);
               if (latestSnap.exists()) {
                 const latestData = latestSnap.data() as SupportTicket;
-                if (latestData.status !== 'resolved') {
+                const adminMessagedInHistory = (latestData.messages || []).some(m => m.sender === 'support' && !m.isAuto);
+                const currentlyTaken = latestData.takenByAdmin || latestData.adminReplied || adminMessagedInHistory;
+
+                if (latestData.status !== 'resolved' && !currentlyTaken) {
                   const autoMsg: SupportMessage = {
                     id: genId(),
                     sender: 'support',
                     senderName: latestData.agentName || 'Support Officer',
                     text: reply,
                     timestamp: formatDate(),
-                    isRead: false
+                    isRead: false,
+                    isAuto: true
                   };
                   await updateDoc(ticketRef, {
                     messages: [...latestData.messages, autoMsg],
@@ -1398,6 +1411,9 @@ We have assigned you a dedicated chat support agent and he will shortly reply to
                     status: 'assigned',
                     supportIsTyping: false
                   });
+                } else {
+                  // Admin has taken/replied to the chat while the timeout was pending. Stop typing.
+                  setTicketTyping(ticketId, 'support', false);
                 }
               }
               pendingRepliesRef.current.delete(ticketId);
@@ -1809,11 +1825,15 @@ We have assigned you a dedicated chat support agent and he will shortly reply to
           // If deposit, credit their balance
           tx.update(uRef, { balance: parseFloat((userData.balance + reqData.amount).toFixed(2)) });
         } else {
-          // If withdrawal, deduct the balance now that it's approved
-          if (userData.balance < reqData.amount) {
-            throw new Error(`Insufficient available wallet balance! User only has $${userData.balance.toLocaleString('en-US')}, but requested $${reqData.amount.toLocaleString('en-US')}.`);
+          // If withdrawal, only deduct if it was not already deducted on submission (backward compatibility)
+          if (reqData.isDeducted) {
+            // Already deducted upon submission, nothing more to deduct!
+          } else {
+            if (userData.balance < reqData.amount) {
+              throw new Error(`Insufficient available wallet balance! User only has $${userData.balance.toLocaleString('en-US')}, but requested $${reqData.amount.toLocaleString('en-US')}.`);
+            }
+            tx.update(uRef, { balance: parseFloat((userData.balance - reqData.amount).toFixed(2)) });
           }
-          tx.update(uRef, { balance: parseFloat((userData.balance - reqData.amount).toFixed(2)) });
         }
 
         tx.update(reqRef, { 
@@ -1858,7 +1878,10 @@ We have assigned you a dedicated chat support agent and he will shortly reply to
           description: `Rejected ${reqData.type}: ${reason}`
         };
 
-        // No refund needed as withdrawal balance is not deducted on submission anymore
+        // If withdrawal was deducted on submission, refund the amount to user's balance on rejection
+        if (reqData.type === 'withdrawal' && reqData.isDeducted) {
+          tx.update(uRef, { balance: parseFloat((userData.balance + reqData.amount).toFixed(2)) });
+        }
 
         tx.update(reqRef, { 
           status: 'rejected',

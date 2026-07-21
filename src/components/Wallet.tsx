@@ -36,7 +36,12 @@ export const Wallet: React.FC = () => {
     .filter(r => r.userId === currentUser?.id && r.type === 'withdrawal' && r.status === 'pending')
     .reduce((sum, r) => sum + (r.amount || 0), 0);
 
-  const availableBalance = Math.max(0, (currentUser?.balance ?? 0) - pendingWithdrawalTotal);
+  // For backward compatibility, only subtract pending withdrawals from the main balance if they weren't deducted on submission
+  const nonDeductedPendingWdTotal = (requests || [])
+    .filter(r => r.userId === currentUser?.id && r.type === 'withdrawal' && r.status === 'pending' && !r.isDeducted)
+    .reduce((sum, r) => sum + (r.amount || 0), 0);
+
+  const availableBalance = Math.max(0, (currentUser?.balance ?? 0) - nonDeductedPendingWdTotal);
 
   // Selected tab for transaction section
   const [activeFormTab, setActiveFormTab] = useState<'deposit' | 'withdraw'>('deposit');

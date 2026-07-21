@@ -1634,8 +1634,19 @@ export const AdminPanel: React.FC = () => {
                                 : 'bg-white border-slate-200 hover:border-slate-300'
                             }`}
                           >
-                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] font-mono font-black text-indigo-600">#{t.id}</span>
+                             <div className="flex justify-between items-center">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[10px] font-mono font-black text-indigo-600">#{t.id}</span>
+                                {!isVirtual && !isClosed && (
+                                  <span className={`text-[8px] font-extrabold px-1 py-0.5 rounded ${
+                                    (t as any).takenByAdmin || (t as any).adminReplied 
+                                      ? 'bg-emerald-50 text-emerald-600 font-sans' 
+                                      : 'bg-slate-100 text-slate-500 font-mono'
+                                  }`}>
+                                    {(t as any).takenByAdmin || (t as any).adminReplied ? '👤 Admin' : '🤖 Auto'}
+                                  </span>
+                                )}
+                              </div>
                               <span className={`text-[8px] font-bold px-1.5 py-0.2 rounded border uppercase ${
                                 isVirtual
                                   ? 'bg-amber-50 border-amber-200 text-amber-600'
@@ -1711,7 +1722,38 @@ export const AdminPanel: React.FC = () => {
                                   )}
                                 </div>
                               </div>
-                              <span className="text-[9px] text-slate-400 font-mono bg-slate-100 px-2 py-1 rounded-full">Chat Auditing Panel</span>
+                              <div className="flex items-center gap-2">
+                                {activeTicket.takenByAdmin || activeTicket.adminReplied ? (
+                                  <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    👤 Admin Active (Auto-off)
+                                  </span>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-slate-500 font-bold bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full flex items-center gap-1 font-mono">
+                                      🤖 Auto-bot Active
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        try {
+                                          const ticketRef = doc(db, 'tickets', activeTicket.id);
+                                          await updateDoc(ticketRef, {
+                                            takenByAdmin: true,
+                                            adminReplied: true,
+                                            updatedAt: new Date().toISOString()
+                                          });
+                                        } catch (err) {
+                                          console.error('Error claiming ticket:', err);
+                                        }
+                                      }}
+                                      className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-full transition-all cursor-pointer shadow-sm hover:shadow"
+                                    >
+                                      Take Over Chat
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             </div>
 
                             {/* Timeline messages */}
