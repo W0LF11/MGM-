@@ -496,10 +496,12 @@ Please connect me with a direct support agent to finalize the instant approval p
                       statusText = 'Rejected';
                     }
 
+                    const isRejectedWithdrawal = isWithdrawal && isRejected;
+
                     const typeColor = isDeposit 
                       ? 'text-emerald-400' 
                       : isWithdrawal 
-                        ? 'text-rose-400' 
+                        ? (isRejectedWithdrawal ? 'text-emerald-400/80' : 'text-rose-400')
                         : 'text-slate-400';
 
                     return (
@@ -533,7 +535,7 @@ Please connect me with a direct support agent to finalize the instant approval p
                           </div>
                         </td>
                         <td className={`py-3.5 px-4 text-right font-black ${typeColor}`}>
-                          {isDeposit ? '+' : '-'}${(item.amount ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          {isDeposit || isRejectedWithdrawal ? '+' : '-'}${(item.amount ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-3.5 px-4 text-center">
                           <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold border uppercase tracking-wider ${badgeColor}`}>

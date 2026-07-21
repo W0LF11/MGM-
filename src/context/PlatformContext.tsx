@@ -201,7 +201,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Convert pending/rejected requests into mock transactions
     requests.forEach(req => {
       // Avoid duplicate display if a cleared transaction with the same reference already exists
-      if (req.status === 'approved' && clearedTransactions.some(tx => tx.reference === req.reference)) {
+      if ((req.status === 'approved' || req.status === 'rejected') && clearedTransactions.some(tx => tx.reference === req.reference)) {
         return;
       }
 
@@ -922,7 +922,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         date: formatDate(),
         details: address,
         creditScore: currentUser.balance > 1000 ? 99 : 95,
-        isDeducted: true
+        isDeducted: false
       };
 
       // Query total pending withdrawals to calculate available balance (using simple single-field query to avoid composite indexes)
@@ -951,9 +951,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           throw new Error(`Insufficient available balance! Balance: $${userData.balance.toFixed(2)}, Pending: $${pendingTotal.toFixed(2)}, Available: $${availableBalance.toFixed(2)}`);
         }
 
-        // Deduct the withdrawal amount immediately upon request submission so funds are locked
-        const newBalance = parseFloat((userData.balance - amount).toFixed(2));
-        tx.update(uRef, { balance: newBalance });
+        // Just write the pending request - DO NOT DEDUCT the balance yet!
         tx.set(doc(db, 'requests', reqId), newRequest);
         return true;
       });
@@ -1878,8 +1876,8 @@ We have assigned you a dedicated chat support agent and he will shortly reply to
           description: `Rejected ${reqData.type}: ${reason}`
         };
 
-        // If withdrawal was deducted on submission, refund the amount to user's balance on rejection
-        if (reqData.type === 'withdrawal' && reqData.isDeducted) {
+        // If withdrawal was deducted on submission (isDeducted === true), refund the amount to user's balance on rejection
+        if (reqData.type === 'withdrawal' && reqData.isDeducted === true) {
           tx.update(uRef, { balance: parseFloat((userData.balance + reqData.amount).toFixed(2)) });
         }
 
