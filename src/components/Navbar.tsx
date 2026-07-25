@@ -140,7 +140,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentTab }) => {
           <div className="flex items-center gap-1 sm:gap-4">
             
             {/* Screenshot-inspired Quick Actions Panel */}
-            <div className="flex items-center gap-2 xs:gap-3.5 sm:gap-6 mr-1 sm:mr-3 border-r border-slate-100 dark:border-slate-800 pr-1.5 sm:pr-4 animate-fade-in" id="header-quick-actions">
+            <div className="hidden md:flex items-center gap-2 xs:gap-3.5 sm:gap-6 mr-1 sm:mr-3 border-r border-slate-100 dark:border-slate-800 pr-1.5 sm:pr-4 animate-fade-in" id="header-quick-actions">
               {/* Game */}
               <button
                 onClick={() => {
