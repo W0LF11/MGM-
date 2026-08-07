@@ -8,7 +8,6 @@ import {
 import { 
   doc, 
   getDoc, 
-  getDocFromCache,
   setDoc, 
   updateDoc, 
   collection, 
@@ -376,21 +375,11 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try {
         if (authUser) {
           try {
-            // Fetch user profile from Firestore with offline fallback
+            // Fetch user profile from Firestore
             const profileRef = doc(db, 'users', authUser.uid);
-            let profileSnap = null;
-            try {
-              profileSnap = await getDoc(profileRef);
-            } catch (getErr) {
-              console.warn('[onAuthStateChanged] getDoc failed (offline/network delay), trying getDocFromCache:', getErr);
-              try {
-                profileSnap = await getDocFromCache(profileRef);
-              } catch {
-                profileSnap = null;
-              }
-            }
+            const profileSnap = await getDoc(profileRef);
 
-            if (profileSnap && profileSnap.exists()) {
+            if (profileSnap.exists()) {
               const data = profileSnap.data() as UserProfile;
               setCurrentUser(data);
               setRoleState(data.role || 'user');
@@ -400,7 +389,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 console.log('[onAuthStateChanged] Registration in progress, skipping default profile generation.');
                 return;
               }
-              // Document does not exist yet (or client is offline and no cache exists)
+              // Document does not exist yet (e.g. registered in auth but db write failed or delayed)
               const emailLower = authUser.email?.toLowerCase() || '';
               const isAdminEmail = emailLower === 'wolfsingh1110@gmail.com' || emailLower === 'vishalpal@gmail.com' || emailLower === 'admin@luckyplatform.com';
               const determinedRole = isAdminEmail ? 'admin' : 'user';
@@ -421,16 +410,12 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 role: determinedRole,
                 creditScore: 100
               };
-              try {
-                await setDoc(profileRef, newProfile);
-              } catch (setErr) {
-                console.warn('[onAuthStateChanged] Could not save initial profile to Firestore (running offline):', setErr);
-              }
+              await setDoc(profileRef, newProfile);
               setCurrentUser(newProfile);
               setRoleState(determinedRole);
             }
           } catch (err) {
-            console.warn('Handled profile snapshot fetch:', err);
+            console.error('Error fetching profile snapshot:', err);
           }
         } else {
           setCurrentUser(null);

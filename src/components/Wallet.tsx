@@ -454,8 +454,8 @@ Please connect me with a direct support agent to finalize the instant approval p
           </span>
         </div>
 
-        {/* Structured Table with inner scroll container - Visible on Desktop */}
-        <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-850 bg-slate-950/40">
+        {/* Structured Table with inner scroll container */}
+        <div className="overflow-x-auto rounded-xl border border-slate-850 bg-slate-950/40">
           <div className="max-h-[250px] overflow-y-auto">
             <table className="w-full text-left border-collapse font-mono text-[11px]">
               <thead>
@@ -557,93 +557,6 @@ Please connect me with a direct support agent to finalize the instant approval p
               </tbody>
             </table>
           </div>
-        </div>
-
-        {/* Mobile-Friendly Transaction Cards - Visible on Mobile */}
-        <div className="block md:hidden max-h-[320px] overflow-y-auto space-y-3 pr-1" id="mobile-ledger-cards">
-          {userRequestsAndTransactions.length === 0 ? (
-            <div className="text-center py-12 text-xs text-slate-500 font-mono">
-              No matching transaction vouchers on record.
-            </div>
-          ) : (
-            userRequestsAndTransactions.map((item, index) => {
-              const isDeposit = item.type === 'deposit';
-              const isWithdrawal = item.type === 'withdrawal';
-              const isPending = item.status === 'pending';
-              const isRejected = item.status === 'rejected';
-              const isApproved = item.status === 'approved' || item.status === 'completed';
-
-              let badgeColor = 'text-slate-400 bg-slate-900 border-slate-800';
-              let statusText: string = item.status;
-              if (isApproved) {
-                badgeColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-                statusText = 'Settled';
-              } else if (isPending) {
-                badgeColor = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
-                statusText = 'Verifying';
-              } else if (isRejected) {
-                badgeColor = 'text-rose-400 bg-rose-500/10 border-rose-500/20';
-                statusText = 'Rejected';
-              }
-
-              const isRejectedWithdrawal = isWithdrawal && isRejected;
-
-              const typeColor = isDeposit 
-                ? 'text-emerald-400' 
-                : isWithdrawal 
-                  ? (isRejectedWithdrawal ? 'text-emerald-400/80' : 'text-rose-400')
-                  : 'text-slate-400';
-
-              return (
-                <div 
-                  key={`mobile-tx-${item.id}-${index}`} 
-                  className="rounded-2xl bg-slate-900/40 border border-slate-850 p-4 space-y-3"
-                >
-                  <div className="flex justify-between items-center text-[10px] font-mono">
-                    <span className="text-slate-400 font-bold">
-                      #{item.reference || item.id}
-                    </span>
-                    <span className="text-slate-500">
-                      {new Date(item.date || item.timestamp || '').toLocaleDateString()}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-bold font-mono ${typeColor}`}>
-                      {isDeposit ? (
-                        <ArrowUpRight className="h-4 w-4" />
-                      ) : isWithdrawal ? (
-                        <ArrowDownLeft className="h-4 w-4" />
-                      ) : null}
-                      <span className="capitalize">{item.type}</span>
-                    </span>
-
-                    <span className={`text-sm font-black font-mono ${typeColor}`}>
-                      {isDeposit || isRejectedWithdrawal ? '+' : '-'}${parseFloat(String(item.amount ?? 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-end text-[10px] font-mono pt-1 border-t border-slate-850/40">
-                    <div>
-                      <span className="block text-slate-500 uppercase text-[8px] font-bold">gateway</span>
-                      <span className="text-slate-300 font-bold">
-                        {item.gateway || item.method || 'System Internal'}
-                      </span>
-                    </div>
-                    <span className={`inline-block px-2 py-0.5 rounded text-[8px] font-bold border uppercase tracking-wider ${badgeColor}`}>
-                      {statusText}
-                    </span>
-                  </div>
-
-                  {isRejected && item.rejectionReason && (
-                    <div className="text-[10px] font-mono text-rose-400 bg-rose-500/5 rounded-xl p-2.5 border border-rose-500/10 leading-normal">
-                      Reason: {item.rejectionReason}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
         </div>
       </div>
 

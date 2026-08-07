@@ -310,7 +310,7 @@ const MainAppContent: React.FC = () => {
         )}
       </AnimatePresence>
 
-      <div className="min-h-screen app-bg text-slate-900 dark:text-white transition-colors duration-300 flex flex-col justify-between pb-16 md:pb-4" id="app-layout-root">
+      <div className="min-h-screen app-bg text-slate-900 dark:text-white transition-colors duration-300 flex flex-col justify-between pb-16" id="app-layout-root">
       
       {/* Toast Alerts Notification System */}
       <Toaster />
@@ -368,7 +368,7 @@ const MainAppContent: React.FC = () => {
       />
 
       {/* PERSISTENT BOTTOM TAB BAR NAVIGATION MENU (Screenshot Inspired) */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-950/85 backdrop-blur-lg border-t border-slate-200/50 dark:border-white/10 px-4 py-2 shadow-xl md:hidden flex justify-around items-center h-16" id="app-bottom-navbar">
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-950/85 backdrop-blur-lg border-t border-slate-200/50 dark:border-white/10 px-4 py-2 shadow-xl flex justify-around items-center h-16" id="app-bottom-navbar">
         {[
           { id: 'home', label: 'Home', icon: HomeIcon },
           { id: 'wallet', label: 'Wallet', icon: WalletIcon },

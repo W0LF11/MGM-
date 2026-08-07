@@ -862,7 +862,7 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
           };
           const positions = dotPositions[val] || [];
           return (
-            <div className="grid grid-cols-3 grid-rows-3 p-1 w-8 h-8 rounded-lg bg-red-600 border border-red-700 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),0_2px_4px_rgba(0,0,0,0.25)] justify-items-center items-center gap-0.5">
+            <div className="grid grid-cols-3 grid-rows-3 p-0.5 sm:p-1 w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg bg-red-600 border border-red-700 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),0_2px_4px_rgba(0,0,0,0.25)] justify-items-center items-center gap-0.5 shrink-0">
               {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((idx) => {
                 const row = Math.floor(idx / 3) + 1;
                 const col = (idx % 3) + 1;
@@ -870,7 +870,7 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
                 return (
                   <div 
                     key={idx} 
-                    className={`w-1.5 h-1.5 rounded-full transition-all duration-150 ${
+                    className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full transition-all duration-150 ${
                       isDot 
                         ? 'bg-white shadow-[0_1px_1px_rgba(0,0,0,0.35)] scale-100' 
                         : 'bg-transparent opacity-0 scale-50'
@@ -886,87 +886,93 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
         const totalWager = totalNote * perBetAmount;
 
         return (
-          <div className="space-y-3 sm:space-y-4 text-left text-slate-100 bg-slate-900/40 p-2.5 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-800 backdrop-blur-md shadow-xl">
+          <div className="space-y-3 sm:space-y-4 text-left text-slate-100 bg-slate-900/80 p-2.5 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-800/80 backdrop-blur-md shadow-xl w-full">
             {/* Header / Tab System & Balance */}
-            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 sm:gap-3 border-b border-slate-800 pb-2.5 sm:pb-3">
-              <div className="flex gap-1 bg-slate-950/40 p-1 rounded-xl border border-slate-800 w-full sm:w-auto justify-between sm:justify-start">
-                <button
-                  onClick={() => setDiceTab('bet')}
-                  className={`flex-1 sm:flex-none text-center px-3 sm:px-4 py-1.5 sm:py-2 text-xs font-black tracking-wide rounded-lg transition-all ${
-                    diceTab === 'bet'
-                      ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-500/10'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Bet
-                </button>
-                <button
-                  onClick={() => setDiceTab('last_bet')}
-                  className={`flex-1 sm:flex-none text-center px-3 sm:px-4 py-1.5 sm:py-2 text-xs font-black tracking-wide rounded-lg transition-all ${
-                    diceTab === 'last_bet'
-                      ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-500/10'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Last bet
-                </button>
-                <button
-                  onClick={() => setDiceTab('how_play')}
-                  className={`flex-1 sm:flex-none text-center px-3 sm:px-4 py-1.5 sm:py-2 text-xs font-black tracking-wide rounded-lg transition-all ${
-                    diceTab === 'how_play'
-                      ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-500/10'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  How play
-                </button>
-              </div>
+            <div className="flex flex-col gap-2.5 sm:gap-3 border-b border-slate-800/80 pb-3">
+              <div className="flex items-center justify-between gap-2">
+                {/* Tab Pills */}
+                <div className="flex flex-1 sm:flex-initial gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800/80">
+                  <button
+                    onClick={() => setDiceTab('bet')}
+                    className={`flex-1 sm:flex-initial px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-black tracking-wide rounded-lg transition-all cursor-pointer ${
+                      diceTab === 'bet'
+                        ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-500/20'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Bet
+                  </button>
+                  <button
+                    onClick={() => setDiceTab('last_bet')}
+                    className={`flex-1 sm:flex-initial px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-black tracking-wide rounded-lg transition-all cursor-pointer ${
+                      diceTab === 'last_bet'
+                        ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-500/20'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Last bet
+                  </button>
+                  <button
+                    onClick={() => setDiceTab('how_play')}
+                    className={`flex-1 sm:flex-initial px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-black tracking-wide rounded-lg transition-all cursor-pointer ${
+                      diceTab === 'how_play'
+                        ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-500/20'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    How play
+                  </button>
+                </div>
 
-              {/* Time Mode Toggles - Running in 5m interval throughout */}
-
-              {/* Balance Widget */}
-              <div className="flex items-center gap-2 bg-slate-950/80 px-3 py-1.5 rounded-xl border border-slate-800 w-full sm:w-auto justify-between">
-                <div className="flex items-center gap-1.5">
+                {/* Balance Widget */}
+                <div className="flex items-center gap-1.5 bg-slate-950/90 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-800/80 shrink-0">
                   <Coins className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                  <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">Balance:</span>
+                  <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider hidden xs:inline">BALANCE:</span>
                   <span className="text-xs font-mono font-black text-amber-400">
                     {showDiceBalance ? `$${(currentUser?.balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$••••••'}
                   </span>
+                  <button
+                    onClick={() => setShowDiceBalance(!showDiceBalance)}
+                    className="text-slate-400 hover:text-white p-0.5 transition-all ml-0.5 cursor-pointer"
+                    title="Toggle balance"
+                  >
+                    {showDiceBalance ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                  </button>
                 </div>
-                <button
-                  onClick={() => setShowDiceBalance(!showDiceBalance)}
-                  className="text-slate-400 hover:text-white p-0.5 transition-all"
-                >
-                  {showDiceBalance ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                </button>
               </div>
             </div>
 
             {/* TAB: BET */}
             {diceTab === 'bet' && (
               <div className="space-y-3 sm:space-y-4">
-                {/* Period Draw Status Info Bar */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 bg-slate-950/40 p-3 sm:p-4 rounded-2xl border border-slate-800/60 relative overflow-hidden">
+                {/* Period Draw Status Info Bar (Stack on Mobile, Row on Desktop) */}
+                <div className="flex flex-col sm:flex-row justify-between gap-3 bg-slate-950/80 p-3 sm:p-4 rounded-2xl border border-slate-800/80 relative overflow-hidden">
                   {/* Left Side: Active Period Countdown */}
-                  <div className="flex flex-col justify-center">
-                    <div className="flex items-center gap-1 text-slate-400 text-[10px] uppercase font-mono font-bold tracking-wider">
-                      <Clock className="h-3 w-3 text-red-500 animate-pulse shrink-0" />
-                      <span className="truncate">Period {getDisplayPeriod()}</span>
+                  <div className="flex flex-col justify-center gap-1">
+                    <div className="flex items-center justify-between sm:justify-start gap-2">
+                      <div className="flex items-center gap-1.5 text-slate-300 text-[10px] sm:text-xs uppercase font-mono font-bold tracking-widest">
+                        <Clock className="h-3.5 w-3.5 text-red-500 animate-pulse shrink-0" />
+                        <span>PERIOD <strong className="text-white">{getDisplayPeriod()}</strong></span>
+                      </div>
                     </div>
-                    <div className="text-red-500 font-mono font-black text-xl sm:text-2xl tracking-widest bg-red-950/10 px-3 py-1 w-fit rounded-xl border border-red-500/20 shadow-inner mt-1">
-                      {formatDiceTimer(diceTimer)}
+                    
+                    <div className="flex items-center gap-3 mt-0.5">
+                      <div className="text-red-500 font-mono font-black text-xl sm:text-2xl tracking-widest bg-red-950/30 px-3 py-1 rounded-xl border border-red-500/30 shadow-inner shrink-0">
+                        {formatDiceTimer(diceTimer)}
+                      </div>
+                      <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium leading-tight">
+                        Guess the sum of 3 numbers. 3-10 is small, 11-18 is big.
+                      </span>
                     </div>
-                    <span className="text-[9px] text-slate-400 font-medium mt-1 leading-tight">
-                      Guess the sum of 3 numbers. 3-10 is small, 11-18 is big.
-                    </span>
                   </div>
 
                   {/* Right Side: Previous Period Winning Result */}
-                  <div className="flex flex-col justify-center items-start sm:items-end border-t sm:border-t-0 sm:border-l border-slate-800/80 pt-2.5 sm:pt-0 pl-0 sm:pl-4">
-                    <span className="text-[10px] text-slate-400 font-mono font-bold uppercase tracking-wider mb-1.5 text-left sm:text-right">
-                      Period {diceLastPeriodInfo.period} win numbers
+                  <div className="flex flex-col justify-center sm:items-end border-t sm:border-t-0 sm:border-l border-slate-800/80 pt-2.5 sm:pt-0 sm:pl-4">
+                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-mono font-bold uppercase tracking-widest mb-1">
+                      PERIOD <span className="text-slate-300">{diceLastPeriodInfo.period}</span> WIN NUMBERS
                     </span>
-                    <div className="flex items-center gap-2 bg-slate-900/60 py-1.5 px-2.5 sm:px-3 rounded-xl border border-slate-800 w-full sm:w-auto justify-between sm:justify-start">
+                    
+                    <div className="flex items-center gap-2 bg-slate-900/90 py-1.5 px-2.5 sm:px-3 rounded-xl border border-slate-800/90 w-fit">
                       {diceRolling ? (
                         <div className="flex gap-1.5 items-center">
                           {[0, 1, 2].map((i) => (
@@ -974,7 +980,7 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
                               key={i}
                               animate={{ 
                                 rotate: [0, 90, 180, 270, 360],
-                                y: [0, -4, 0, -4, 0]
+                                y: [0, -3, 0, -3, 0]
                               }}
                               transition={{ 
                                 repeat: Infinity, 
@@ -986,36 +992,40 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
                               {renderDiceDotLayout(Math.floor(Math.random() * 6) + 1)}
                             </motion.div>
                           ))}
-                          <span className="text-[9px] font-mono font-black text-red-500 uppercase tracking-widest animate-pulse ml-1.5">
+                          <span className="text-[9px] font-mono font-black text-red-500 uppercase tracking-widest animate-pulse ml-1">
                             ROLLING...
                           </span>
                         </div>
                       ) : (
-                        <>
-                          <div className="flex gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="flex gap-1 sm:gap-1.5 shrink-0">
                             {diceLastPeriodInfo.dice.map((d, idx) => (
                               <React.Fragment key={idx}>{renderDiceDotLayout(d)}</React.Fragment>
                             ))}
                           </div>
-                          <div className="h-6 w-px bg-slate-800 mx-1" />
-                          <div className="text-right">
-                            <span className="text-xs font-black text-amber-400 font-mono block leading-none">
+                          <div className="h-5 w-px bg-slate-800 mx-0.5" />
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-sm font-black text-amber-400 font-mono">
                               {diceLastPeriodInfo.sum}
                             </span>
-                            <span className="text-[8px] font-mono font-bold text-slate-400 uppercase tracking-wider block mt-0.5">
-                              {diceLastPeriodInfo.sum >= 11 ? 'Big' : 'Small'}
+                            <span className={`text-[8px] font-mono font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                              diceLastPeriodInfo.sum >= 11 
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' 
+                                : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                            }`}>
+                              {diceLastPeriodInfo.sum >= 11 ? 'BIG' : 'SMALL'}
                             </span>
                           </div>
-                        </>
+                        </div>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* Horizontal Trend History (Spotting Patterns) */}
-                <div className="bg-slate-950/35 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl border border-slate-800/40 flex items-center justify-between gap-2 sm:gap-3 text-[10px]" id="dice-trend-history-container">
-                  <div className="flex items-center gap-1.5 font-mono font-black text-slate-400 uppercase tracking-wider shrink-0 text-[9px] sm:text-[10px]">
-                    <TrendingUp className="h-3.5 w-3.5 text-red-500 shrink-0" /> Trend History
+                {/* Horizontal Trend History */}
+                <div className="bg-slate-950/80 px-3 py-2 rounded-xl sm:rounded-2xl border border-slate-800/80 flex items-center justify-between gap-2 text-[10px]" id="dice-trend-history-container">
+                  <div className="flex items-center gap-1 font-mono font-black text-slate-400 uppercase tracking-wider shrink-0 text-[9px] sm:text-[10px]">
+                    <TrendingUp className="h-3.5 w-3.5 text-red-500 shrink-0" /> TREND HISTORY
                   </div>
                   <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5">
                     {diceTrends.map((tSum, idx) => {
@@ -1024,12 +1034,12 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
                       return (
                         <div 
                           key={idx}
-                          className={`h-5 w-5 shrink-0 rounded-full flex items-center justify-center font-mono font-black text-[9px] border transition-all ${
+                          className={`h-5 w-5 rounded-full flex items-center justify-center font-mono font-black text-[9px] border shrink-0 transition-all ${
                             idx === 0 
-                              ? 'bg-red-600 text-white border-red-400 scale-110 shadow-md shadow-red-500/25' 
+                              ? 'bg-red-600 text-white border-red-400 scale-105 shadow-md shadow-red-500/30' 
                               : isBig 
-                              ? 'bg-orange-950/60 text-orange-400 border-orange-500/30' 
-                              : 'bg-indigo-950/60 text-indigo-400 border-indigo-500/30'
+                              ? 'bg-orange-950/70 text-orange-400 border-orange-500/40' 
+                              : 'bg-indigo-950/70 text-indigo-400 border-indigo-500/40'
                           }`}
                           title={`Sum: ${tSum} (${isBig ? 'Big' : 'Small'}, ${isEven ? 'Even' : 'Odd'})`}
                         >
@@ -1040,13 +1050,14 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
                   </div>
                 </div>
 
-                {/* Orange Grid of Bets Options (matching the screenshot) */}
+                {/* Orange Grid of Bets Options */}
                 <div className="space-y-2">
-                  <span className="text-[10px] text-slate-400 font-mono font-black uppercase tracking-wider block pl-1">
-                    Select Bets Combinations
+                  <span className="text-[10px] text-slate-400 font-mono font-black uppercase tracking-wider block pl-0.5">
+                    SELECT BETS COMBINATIONS
                   </span>
+                  
+                  {/* Top Row: Big / Small / Odd / Even */}
                   <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-                    {/* Row 1: Big / Small / Odd / Even */}
                     {DICE_BET_OPTIONS.slice(0, 4).map((opt) => {
                       const isSelected = diceSelectedChoices.includes(opt.id);
                       return (
@@ -1060,23 +1071,23 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
                               setDiceSelectedChoices(prev => [...prev, opt.id]);
                             }
                           }}
-                          className={`p-1.5 sm:p-2.5 rounded-xl transition-all duration-200 cursor-pointer flex flex-col items-center justify-center border text-center ${
+                          className={`p-2 sm:p-2.5 rounded-xl transition-all duration-150 cursor-pointer flex flex-col items-center justify-center border active:scale-95 ${
                             isSelected
-                              ? 'bg-amber-500 text-white border-amber-300 ring-2 ring-amber-400 shadow-lg scale-95'
-                              : 'bg-orange-600 text-orange-50 border-orange-500 hover:bg-orange-500'
+                              ? 'bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-400 shadow-lg font-black'
+                              : 'bg-orange-600 text-white border-orange-500 hover:bg-orange-500 shadow-sm'
                           }`}
                         >
-                          <span className="text-xs sm:text-sm font-black tracking-tight leading-none">{opt.label}</span>
-                          <span className="text-[7px] sm:text-[8px] font-bold text-white/80 uppercase tracking-tight mt-0.5 whitespace-nowrap">
-                            Odds {opt.odds}
+                          <span className="text-xs sm:text-sm font-black tracking-tight">{opt.label}</span>
+                          <span className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-wider mt-0.5 ${isSelected ? 'text-slate-900' : 'text-orange-100/80'}`}>
+                            ODDS {opt.odds}
                           </span>
                         </button>
                       );
                     })}
                   </div>
 
-                  <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-                    {/* Rows 2-5: Individual sums 3 to 18 */}
+                  {/* Rows 2-5: Individual sums 3 to 18 */}
+                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5 sm:gap-2">
                     {DICE_BET_OPTIONS.slice(4).map((opt) => {
                       const isSelected = diceSelectedChoices.includes(opt.id);
                       return (
@@ -1090,14 +1101,14 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
                               setDiceSelectedChoices(prev => [...prev, opt.id]);
                             }
                           }}
-                          className={`p-1.5 sm:p-2 rounded-xl transition-all duration-200 cursor-pointer flex flex-col items-center justify-center border text-center ${
+                          className={`py-1.5 sm:py-2 px-1 rounded-xl transition-all duration-150 cursor-pointer flex flex-col items-center justify-center border active:scale-95 ${
                             isSelected
-                              ? 'bg-amber-500 text-white border-amber-300 ring-2 ring-amber-400 shadow-lg scale-95'
-                              : 'bg-[#cf5c0c] text-orange-50 border-orange-600 hover:bg-orange-500'
+                              ? 'bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-400 shadow-lg font-black'
+                              : 'bg-[#cf5c0c] text-white border-orange-600 hover:bg-orange-500 shadow-sm'
                           }`}
                         >
                           <span className="text-xs font-black font-mono leading-none">{opt.label}</span>
-                          <span className="text-[7px] font-bold text-white/70 uppercase tracking-tight mt-0.5 whitespace-nowrap">
+                          <span className={`text-[7px] sm:text-[8px] font-bold uppercase tracking-widest mt-0.5 ${isSelected ? 'text-slate-900' : 'text-orange-100/70'}`}>
                             {opt.odds}
                           </span>
                         </button>
@@ -1107,11 +1118,11 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
                 </div>
 
                 {/* Betting Amount Settings Panel */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4 bg-slate-950/40 p-2.5 sm:p-3 rounded-2xl border border-slate-800/80">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 bg-slate-950/80 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-800/80">
                   <div className="flex items-center justify-between sm:justify-start gap-2">
-                    <span className="text-xs font-mono font-bold text-slate-400">per bet</span>
-                    <div className="flex items-center gap-1 bg-slate-950 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl border border-slate-800">
-                      <span className="text-[10px] font-bold text-slate-500">[</span>
+                    <span className="text-[11px] font-mono font-bold text-slate-400">per bet</span>
+                    <div className="flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">
+                      <span className="text-[10px] font-bold text-slate-500">$</span>
                       <input
                         type="number"
                         disabled={diceIsCommitted}
@@ -1122,22 +1133,20 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
                             setPerBetAmount(val);
                           }
                         }}
-                        className="w-14 sm:w-16 bg-transparent text-center text-xs font-mono font-black text-white focus:outline-none focus:ring-0 p-0"
+                        className="w-14 bg-transparent text-center text-xs font-mono font-black text-white focus:outline-none focus:ring-0 p-0"
                       />
-                      <span className="text-[10px] font-bold text-slate-500">]</span>
                     </div>
-                    <span className="text-xs font-mono font-bold text-slate-400">$</span>
                   </div>
 
-                  <div className="grid grid-cols-5 gap-1 w-full sm:w-auto">
+                  <div className="flex items-center gap-1 overflow-x-auto no-scrollbar justify-between sm:justify-end">
                     {[5, 10, 50, 100, 500].map((preset) => (
                       <button
                         key={preset}
                         disabled={diceIsCommitted}
                         onClick={() => setPerBetAmount(preset)}
-                        className={`px-1.5 sm:px-2 py-1 rounded-lg text-[9px] sm:text-[10px] font-mono font-black transition-all text-center ${
+                        className={`flex-1 sm:flex-initial px-2 py-1 rounded-lg text-[10px] font-mono font-black transition-all cursor-pointer ${
                           perBetAmount === preset
-                            ? 'bg-amber-500 text-slate-950 border border-amber-400'
+                            ? 'bg-amber-500 text-slate-950 border border-amber-400 shadow-sm'
                             : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
                         }`}
                       >
@@ -1148,30 +1157,28 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
                 </div>
 
                 {/* Black footer control bar */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4 bg-slate-950 p-3 sm:p-4 rounded-2xl border border-slate-800">
-                  <div className="flex items-center justify-between sm:justify-start gap-4">
-                    <button
-                      disabled={diceIsCommitted}
-                      onClick={() => setDiceSelectedChoices([])}
-                      className="text-xs font-black text-slate-400 hover:text-white uppercase tracking-widest transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
-                    >
-                      Clear
-                    </button>
+                <div className="flex items-center justify-between bg-slate-950 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-800/90 gap-2">
+                  <button
+                    disabled={diceIsCommitted}
+                    onClick={() => setDiceSelectedChoices([])}
+                    className="text-[11px] sm:text-xs font-black text-slate-400 hover:text-white uppercase tracking-wider transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none px-2 py-1 cursor-pointer"
+                  >
+                    Clear
+                  </button>
 
-                    <div className="text-[11px] sm:text-xs font-mono font-bold text-slate-300">
-                      <span className="text-amber-400 font-black text-xs sm:text-sm">{totalNote}</span> Note,{' '}
-                      <span className="text-emerald-400 font-black text-xs sm:text-sm">${totalWager.toFixed(2)}</span> Dollar
-                    </div>
+                  <div className="text-[11px] sm:text-xs font-mono font-bold text-slate-300 text-center">
+                    <span className="text-amber-400 font-black text-xs sm:text-sm">{totalNote}</span> Note,{' '}
+                    <span className="text-emerald-400 font-black text-xs sm:text-sm">${totalWager.toFixed(2)}</span>
                   </div>
 
                   <button
                     onClick={handleConfirmDiceBet}
                     disabled={diceIsCommitted || totalNote === 0}
-                    className={`w-full sm:w-auto px-5 sm:px-6 py-2.5 rounded-xl font-black text-xs tracking-widest uppercase transition-all duration-300 text-center ${
+                    className={`px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl font-black text-[11px] sm:text-xs tracking-wider uppercase transition-all duration-300 ${
                       diceIsCommitted
                         ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse'
                         : totalNote > 0
-                        ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 cursor-pointer shadow-lg shadow-emerald-500/10'
+                        ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 cursor-pointer shadow-lg shadow-emerald-500/20 active:scale-95'
                         : 'bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed'
                     }`}
                   >
@@ -2842,9 +2849,9 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
               />
             
             {/* Cabinet Top Header */}
-            <div className="p-3 sm:p-4 border-b border-slate-150 dark:border-slate-850 flex justify-between items-center bg-slate-50 dark:bg-slate-900/40">
+            <div className="p-3 sm:p-4 border-b border-slate-150 dark:border-slate-850 flex justify-between items-center bg-slate-50 dark:bg-slate-900/40 shrink-0">
               <div className="flex items-center gap-2">
-                <span className="h-8 w-8 flex items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950 text-sm shrink-0">
+                <span className="h-8 w-8 flex items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950 text-sm">
                   🎮
                 </span>
                 <div>
@@ -2857,7 +2864,7 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
 
               <button 
                 onClick={handleCloseCabinet}
-                className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
                 id="btn-close-cabinet"
               >
                 <XCircle className="h-6 w-6" />
@@ -2865,7 +2872,7 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
             </div>
 
             {/* Main Interactive Cabinet Board (Scrollable) */}
-            <div className="p-3 sm:p-6 flex-1 overflow-y-auto space-y-4 sm:space-y-6">
+            <div className="p-2 sm:p-5 flex-1 overflow-y-auto space-y-3 sm:space-y-6">
               
               {currentUser?.lockedGames?.includes(selectedGameId) ? (
                 <div className="flex flex-col items-center justify-center text-center p-8 space-y-4 max-w-md mx-auto">
