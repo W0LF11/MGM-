@@ -14,7 +14,10 @@ import {
   FileCheck,
   AlertCircle,
   HelpCircle,
-  RotateCcw
+  RotateCcw,
+  Folder,
+  Camera,
+  HardDrive
 } from 'lucide-react';
 import { SupportTicket, SupportMessage } from '../types';
 
@@ -36,12 +39,20 @@ export const Support: React.FC = () => {
   const [rating, setRating] = useState<number>(0);
   const [feedbackText, setFeedbackText] = useState<string>('');
 
-  // Attachment simulator
+  // Attachment menu state
   const [showAttach, setShowAttach] = useState(false);
-  const mockAttachments = [
-    { name: 'deposit_receipt_77A9BC.png', type: 'image', url: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=300&q=80' },
-    { name: 'blockchain_hash_audit.txt', type: 'document', url: '#' },
-    { name: 'screen_spin_error.jpg', type: 'image', url: 'https://images.unsplash.com/photo-1540747737956-378724044432?auto=format&fit=crop&w=300&q=80' }
+  const [showDriveModal, setShowDriveModal] = useState(false);
+
+  // File input refs for real attachment options
+  const chooseFileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const photoLibraryInputRef = useRef<HTMLInputElement>(null);
+
+  const mockDriveFiles = [
+    { name: 'MGM_Deposit_Receipt_77A9BC.png', size: '1.2 MB', type: 'image', url: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=600&q=80' },
+    { name: 'Blockchain_Hash_Audit_Report.pdf', size: '420 KB', type: 'document', url: '#' },
+    { name: 'VIP_Account_Verification_Proof.jpg', size: '2.8 MB', type: 'image', url: 'https://images.unsplash.com/photo-1540747737956-378724044432?auto=format&fit=crop&w=600&q=80' },
+    { name: 'Bank_Transfer_Receipt_Statement.pdf', size: '890 KB', type: 'document', url: '#' }
   ];
 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -184,10 +195,24 @@ export const Support: React.FC = () => {
     }
   };
 
-  const handleAttachMock = (file: { name: string, type: string, url: string }) => {
-    if (!directTicketId) return;
-    addMessageToTicket(directTicketId, `Attached file: ${file.name}`, 'user', { name: file.name, url: file.url });
-    setShowAttach(false);
+  const handleRealFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !directTicketId) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      addMessageToTicket(
+        directTicketId, 
+        `Attached file: ${file.name}`, 
+        'user', 
+        { name: file.name, url: dataUrl }
+      );
+    };
+    reader.readAsDataURL(file);
+
+    // Reset input value so re-selecting same file works
+    e.target.value = '';
   };
 
   const handleReopenChat = async () => {
@@ -327,24 +352,19 @@ export const Support: React.FC = () => {
                         {m.text}
 
                         {/* Render clickable uploaded file image preview */}
-                        {m.fileUrl && m.fileName?.match(/\.(jpg|jpeg|png|gif)/i) && (
-                          <div className="mt-2 rounded-xl overflow-hidden border border-slate-100/20 max-w-[220px] shadow-sm">
-                            <img referrerPolicy="no-referrer" src={m.fileUrl} alt={m.fileName} className="w-full h-auto" />
-                            <a 
-                              href={m.fileUrl} 
-                              target="_blank" 
-                              rel="noreferrer" 
-                              className="block bg-slate-950/80 p-2 text-[10px] text-center text-emerald-400 font-mono font-bold hover:underline"
-                            >
-                              View original attachment
-                            </a>
+                        {m.fileUrl && (m.fileUrl.startsWith('data:image/') || m.fileName?.match(/\.(jpg|jpeg|png|gif|webp|svg)/i)) && (
+                          <div className="mt-2 rounded-xl overflow-hidden border border-white/20 max-w-[240px] shadow-md bg-slate-950/60">
+                            <img referrerPolicy="no-referrer" src={m.fileUrl} alt={m.fileName} className="w-full h-auto max-h-56 object-cover" />
+                            <div className="p-1.5 bg-slate-950/90 text-[10px] text-center text-emerald-400 font-mono font-bold truncate">
+                              {m.fileName}
+                            </div>
                           </div>
                         )}
 
-                        {m.fileUrl && !m.fileName?.match(/\.(jpg|jpeg|png|gif)/i) && (
-                          <div className="mt-2 p-2 bg-black/20 rounded-lg flex items-center gap-2 text-[10px] font-mono text-emerald-400 border border-emerald-500/10">
-                            <FileCheck className="h-3.5 w-3.5" />
-                            <span className="truncate max-w-[150px]">{m.fileName}</span>
+                        {m.fileUrl && !m.fileUrl.startsWith('data:image/') && !m.fileName?.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) && (
+                          <div className="mt-2 p-2.5 bg-black/30 rounded-xl flex items-center gap-2 text-[10px] font-mono text-emerald-300 border border-emerald-500/20 shadow-inner">
+                            <FileCheck className="h-4 w-4 shrink-0 text-emerald-400" />
+                            <span className="truncate max-w-[160px] font-bold">{m.fileName}</span>
                           </div>
                         )}
                       </div>
@@ -421,24 +441,183 @@ export const Support: React.FC = () => {
                   ))}
                 </div>
 
-                {/* File Attachment list slider */}
+                {/* File Attachment Menu Popover - Matching Image 2 */}
                 {showAttach && (
-                  <div className="absolute bottom-16 left-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 shadow-xl space-y-2 z-10 w-64 text-left">
-                    <div className="flex justify-between items-center text-[10px] font-mono font-bold text-slate-400 border-b border-slate-100 dark:border-slate-900 pb-1.5">
-                      <span>SIMULATED FILE UPLOADS</span>
-                      <button onClick={() => setShowAttach(false)}><X className="h-3 w-3" /></button>
+                  <>
+                    <div 
+                      className="fixed inset-0 z-20" 
+                      onClick={() => setShowAttach(false)} 
+                    />
+
+                    <div className="absolute bottom-16 left-2 sm:left-4 bg-[#141c2b] dark:bg-[#121a28] border border-slate-700/80 rounded-2xl sm:rounded-3xl p-2 sm:p-2.5 shadow-2xl z-30 w-60 sm:w-64 space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-150 text-left">
+                      
+                      {/* Option 1: Google Drive */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAttach(false);
+                          setShowDriveModal(true);
+                        }}
+                        className="w-full flex items-center gap-3.5 px-3.5 py-3 rounded-xl sm:rounded-2xl hover:bg-slate-800/80 text-white transition-all cursor-pointer text-left active:scale-[0.98]"
+                      >
+                        <svg className="w-6 h-6 text-white shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M9 3h6l7 12h-6L9 3z" />
+                          <path d="M2 15l7-12 4.5 8L7 22 2 15z" />
+                          <path d="M22 15H10l-3.5 7h11L22 15z" />
+                        </svg>
+                        <span className="text-base font-medium text-white tracking-tight">Google Drive</span>
+                      </button>
+
+                      {/* Option 2: Choose File */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAttach(false);
+                          chooseFileInputRef.current?.click();
+                        }}
+                        className="w-full flex items-center gap-3.5 px-3.5 py-3 rounded-xl sm:rounded-2xl hover:bg-slate-800/80 text-white transition-all cursor-pointer text-left active:scale-[0.98]"
+                      >
+                        <Folder className="w-6 h-6 text-white shrink-0 stroke-[1.8]" />
+                        <span className="text-base font-medium text-white tracking-tight">Choose File</span>
+                      </button>
+
+                      {/* Option 3: Take photo */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAttach(false);
+                          cameraInputRef.current?.click();
+                        }}
+                        className="w-full flex items-center gap-3.5 px-3.5 py-3 rounded-xl sm:rounded-2xl hover:bg-slate-800/80 text-white transition-all cursor-pointer text-left active:scale-[0.98]"
+                      >
+                        <Camera className="w-6 h-6 text-white shrink-0 stroke-[1.8]" />
+                        <span className="text-base font-medium text-white tracking-tight">Take photo</span>
+                      </button>
+
+                      {/* Option 4: Photo Library */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAttach(false);
+                          photoLibraryInputRef.current?.click();
+                        }}
+                        className="w-full flex items-center gap-3.5 px-3.5 py-3 rounded-xl sm:rounded-2xl hover:bg-slate-800/80 text-white transition-all cursor-pointer text-left active:scale-[0.98]"
+                      >
+                        <svg className="w-6 h-6 text-white shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="2" y="6" width="15" height="14" rx="2.5" />
+                          <path d="M7 2h13a2.5 2.5 0 0 1 2.5 2.5v12" />
+                          <circle cx="6.5" cy="10.5" r="1.25" />
+                          <path d="M2 17l4-4 3 3 4-5 4 5" />
+                        </svg>
+                        <span className="text-base font-medium text-white tracking-tight">Photo Library</span>
+                      </button>
                     </div>
-                    <div className="space-y-1.5">
-                      {mockAttachments.map(f => (
-                        <button
-                          key={f.name}
-                          onClick={() => handleAttachMock(f)}
-                          className="w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900 text-xs text-left text-slate-600 dark:text-slate-300 font-semibold truncate"
+                  </>
+                )}
+
+                {/* Hidden File Inputs for real user uploads */}
+                <input
+                  type="file"
+                  ref={chooseFileInputRef}
+                  onChange={handleRealFileChange}
+                  className="hidden"
+                  id="support-choose-file-input"
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  ref={cameraInputRef}
+                  onChange={handleRealFileChange}
+                  className="hidden"
+                  id="support-camera-input"
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={photoLibraryInputRef}
+                  onChange={handleRealFileChange}
+                  className="hidden"
+                  id="support-photo-library-input"
+                />
+
+                {/* Google Drive Selector Modal */}
+                {showDriveModal && (
+                  <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                    <div className="bg-[#121a28] border border-slate-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-5 space-y-4 text-left">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div className="flex items-center gap-2.5">
+                          <svg className="w-6 h-6 text-blue-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M9 3h6l7 12h-6L9 3z" />
+                            <path d="M2 15l7-12 4.5 8L7 22 2 15z" />
+                            <path d="M22 15H10l-3.5 7h11L22 15z" />
+                          </svg>
+                          <div>
+                            <h3 className="font-bold text-sm text-white">Google Drive</h3>
+                            <p className="text-[10px] text-slate-400 font-mono">Select file from Google Cloud Storage</p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => setShowDriveModal(false)}
+                          className="p-1 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
                         >
-                          {f.type === 'image' ? <ImageIcon className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> : <Paperclip className="h-3.5 w-3.5 text-blue-500 shrink-0" />}
-                          <span className="truncate">{f.name}</span>
+                          <X className="h-5 w-5" />
                         </button>
-                      ))}
+                      </div>
+
+                      <div className="space-y-2">
+                        <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                          Recent Cloud Documents & Receipts
+                        </span>
+                        <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar">
+                          {mockDriveFiles.map((file) => (
+                            <button
+                              key={file.name}
+                              type="button"
+                              onClick={() => {
+                                if (directTicketId) {
+                                  addMessageToTicket(
+                                    directTicketId, 
+                                    `Attached Google Drive file: ${file.name}`, 
+                                    'user', 
+                                    { name: file.name, url: file.url }
+                                  );
+                                }
+                                setShowDriveModal(false);
+                              }}
+                              className="w-full flex items-center justify-between p-3 rounded-2xl bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800 transition-all cursor-pointer text-left group"
+                            >
+                              <div className="flex items-center gap-3 truncate">
+                                {file.type === 'image' ? (
+                                  <ImageIcon className="h-5 w-5 text-emerald-400 shrink-0" />
+                                ) : (
+                                  <FileCheck className="h-5 w-5 text-blue-400 shrink-0" />
+                                )}
+                                <div className="truncate">
+                                  <p className="text-xs font-bold text-slate-200 group-hover:text-white truncate">{file.name}</p>
+                                  <p className="text-[9px] font-mono text-slate-400">{file.size} • Google Drive Cloud</p>
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg shrink-0">
+                                Attach
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-800 flex justify-between items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowDriveModal(false);
+                            chooseFileInputRef.current?.click();
+                          }}
+                          className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer text-center"
+                        >
+                          Upload Local File to Drive
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

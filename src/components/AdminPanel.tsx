@@ -28,6 +28,7 @@ import {
   Plus, 
   Trash2, 
   FileText,
+  Paperclip,
   Copy,
   UserCheck,
   Zap,
@@ -393,6 +394,8 @@ export const AdminPanel: React.FC = () => {
   const [activeTicketId, setActiveTicketId] = useState<string>('');
   const [supportSearch, setSupportSearch] = useState('');
   const [adminReplyText, setAdminReplyText] = useState('');
+  const [adminFile, setAdminFile] = useState<{ name: string; url: string } | null>(null);
+  const adminFileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // CMS/Game state configs
@@ -752,10 +755,12 @@ export const AdminPanel: React.FC = () => {
   // Submit support team reply
   const handleAdminReplyText = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeTicketId || !adminReplyText.trim()) return;
+    if (!activeTicketId || (!adminReplyText.trim() && !adminFile)) return;
     try {
-      await addMessageToTicket(activeTicketId, adminReplyText, 'support');
+      const textToSend = adminReplyText.trim() || (adminFile ? `Attached file: ${adminFile.name}` : '');
+      await addMessageToTicket(activeTicketId, textToSend, 'support', adminFile || undefined);
       setAdminReplyText('');
+      setAdminFile(null);
     } catch (err) {
       console.error(err);
     }
@@ -1760,12 +1765,13 @@ export const AdminPanel: React.FC = () => {
                             <div className="flex-1 overflow-y-auto my-3 pr-1 space-y-3">
                               {(activeTicket.messages || []).map((m, idx) => {
                                 const isSupportSender = m.sender === 'support';
+                                const isImage = m.fileUrl && (m.fileUrl.startsWith('data:image/') || m.fileName?.match(/\.(jpg|jpeg|png|gif|webp|svg)/i));
                                 return (
                                   <div key={m.id ? `${m.id}-${idx}` : idx} className={`flex ${isSupportSender ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`p-3 max-w-xs rounded-2xl border text-xs leading-relaxed ${
+                                    <div className={`p-3 max-w-sm rounded-2xl border text-xs leading-relaxed ${
                                       isSupportSender
                                         ? 'bg-indigo-600 text-white border-indigo-600 rounded-tr-none shadow-sm'
-                                        : 'bg-white border-slate-200 text-slate-700 rounded-tl-none shadow-xs'
+                                        : 'bg-white border-slate-200 text-slate-800 rounded-tl-none shadow-xs'
                                     }`}>
                                       <span className={`block text-[8px] uppercase tracking-wider mb-1 font-bold ${
                                         isSupportSender ? 'text-indigo-200' : 'text-slate-400'
@@ -1773,6 +1779,30 @@ export const AdminPanel: React.FC = () => {
                                         {m.senderName}
                                       </span>
                                       <p className="font-sans whitespace-pre-wrap">{m.text}</p>
+                                      
+                                      {/* File / Image Attachment Preview */}
+                                      {isImage && (
+                                        <div className="mt-2 rounded-xl overflow-hidden border border-slate-200/80 max-w-[260px] shadow-sm bg-slate-100">
+                                          <a href={m.fileUrl} target="_blank" rel="noreferrer" className="block cursor-pointer">
+                                            <img referrerPolicy="no-referrer" src={m.fileUrl} alt={m.fileName || 'Attachment'} className="w-full h-auto max-h-60 object-cover hover:opacity-95 transition-opacity" />
+                                          </a>
+                                          <div className="p-1.5 bg-slate-200/90 text-[10px] text-center text-slate-700 font-mono font-bold truncate">
+                                            {m.fileName || 'Image Attachment'}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {m.fileUrl && !isImage && (
+                                        <div className={`mt-2 p-2 rounded-xl flex items-center gap-2 text-[10px] font-mono border ${
+                                          isSupportSender ? 'bg-indigo-700/60 border-indigo-500 text-indigo-100' : 'bg-slate-100 border-slate-200 text-slate-700'
+                                        }`}>
+                                          <FileText className="h-4 w-4 shrink-0" />
+                                          <a href={m.fileUrl} target="_blank" rel="noreferrer" className="truncate max-w-[180px] font-bold hover:underline">
+                                            {m.fileName || 'Document Attachment'}
+                                          </a>
+                                        </div>
+                                      )}
+
                                       <span className={`block text-[8px] mt-1.5 text-right ${
                                         isSupportSender ? 'text-indigo-300' : 'text-slate-400'
                                       }`}>
@@ -1786,21 +1816,53 @@ export const AdminPanel: React.FC = () => {
                             </div>
 
                             {/* Reply Input */}
-                            <form onSubmit={handleAdminReplyText} className="flex gap-2 pt-2 border-t border-slate-200">
-                              <input
-                                type="text"
-                                required
-                                placeholder="Write message reply..."
-                                value={adminReplyText}
-                                onChange={(e) => setAdminReplyText(e.target.value)}
-                                className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
-                              />
-                              <button
-                                type="submit"
-                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs uppercase cursor-pointer transition-colors"
-                              >
-                                Send Reply
-                              </button>
+                            <form onSubmit={handleAdminReplyText} className="flex flex-col gap-2 pt-2 border-t border-slate-200">
+                              {adminFile && (
+                                <div className="flex items-center justify-between bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl text-xs text-indigo-700 font-mono">
+                                  <span className="truncate max-w-xs font-bold">Attachment: {adminFile.name}</span>
+                                  <button type="button" onClick={() => setAdminFile(null)} className="text-slate-400 hover:text-red-500 cursor-pointer">
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              )}
+                              <div className="flex gap-2 items-center">
+                                <button
+                                  type="button"
+                                  onClick={() => adminFileInputRef.current?.click()}
+                                  className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors cursor-pointer shrink-0"
+                                  title="Attach file or photo"
+                                >
+                                  <Paperclip className="h-4 w-4" />
+                                </button>
+                                <input
+                                  type="file"
+                                  ref={adminFileInputRef}
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    const reader = new FileReader();
+                                    reader.onload = (ev) => {
+                                      setAdminFile({ name: file.name, url: ev.target?.result as string });
+                                    };
+                                    reader.readAsDataURL(file);
+                                    e.target.value = '';
+                                  }}
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Write message reply..."
+                                  value={adminReplyText}
+                                  onChange={(e) => setAdminReplyText(e.target.value)}
+                                  className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                                />
+                                <button
+                                  type="submit"
+                                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs uppercase cursor-pointer transition-colors shrink-0"
+                                >
+                                  Send Reply
+                                </button>
+                              </div>
                             </form>
                           </>
                         );
