@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { usePlatform } from '../context/PlatformContext';
 import { DiceSchedule, SupportTicket } from '../types';
 import { DiceController } from './DiceController';
@@ -29,6 +29,8 @@ import {
   Trash2, 
   FileText,
   Paperclip,
+  Maximize2,
+  Minimize2,
   Copy,
   UserCheck,
   Zap,
@@ -40,6 +42,9 @@ import {
   LogOut,
   Sliders,
   Bell,
+  BellRing,
+  Volume2,
+  VolumeX,
   Eye,
   EyeOff,
   Lock,
@@ -392,11 +397,82 @@ export const AdminPanel: React.FC = () => {
 
   // Support ticket replies state
   const [activeTicketId, setActiveTicketId] = useState<string>('');
+  const [isFullScreenChat, setIsFullScreenChat] = useState<boolean>(false);
+  const [isSidebarHidden, setIsSidebarHidden] = useState<boolean>(true); // Hide side panel by default when chat is open for maximum chat size
+  const [showBellDropdown, setShowBellDropdown] = useState<boolean>(false);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [latestToast, setLatestToast] = useState<{ ticketId: string; username: string; text: string; id: string } | null>(null);
   const [supportSearch, setSupportSearch] = useState('');
   const [adminReplyText, setAdminReplyText] = useState('');
   const [adminFile, setAdminFile] = useState<{ name: string; url: string } | null>(null);
   const adminFileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const prevMsgCountRef = useRef<number>(-1);
+
+  // Audio chime player for instant admin notification
+  const playNotificationChime = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15); // A5
+      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch (e) {
+      console.log('Audio alert error or blocked by browser', e);
+    }
+  };
+
+  // Memoized user messages list across all tickets
+  const allUserMessages = useMemo(() => {
+    const list: Array<{ ticketId: string; username: string; text: string; timestamp: string; id: string }> = [];
+    tickets.forEach(t => {
+      (t.messages || []).forEach(m => {
+        if (m.sender === 'user') {
+          list.push({
+            ticketId: t.id,
+            username: t.username || 'User',
+            text: m.text || (m.fileName ? `📎 Attached file: ${m.fileName}` : 'New user message'),
+            timestamp: m.timestamp || new Date().toISOString(),
+            id: m.id || `${t.id}-${m.timestamp}`
+          });
+        }
+      });
+    });
+    return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [tickets]);
+
+  // Instant notification listener whenever a user sends a message
+  useEffect(() => {
+    if (allUserMessages.length === 0) return;
+    
+    if (prevMsgCountRef.current !== -1 && allUserMessages.length > prevMsgCountRef.current) {
+      const latest = allUserMessages[0];
+      if (latest) {
+        if (soundEnabled) {
+          playNotificationChime();
+        }
+        setLatestToast({
+          ticketId: latest.ticketId,
+          username: latest.username,
+          text: latest.text,
+          id: latest.id
+        });
+        setTimeout(() => {
+          setLatestToast(null);
+        }, 6000);
+      }
+    }
+    prevMsgCountRef.current = allUserMessages.length;
+  }, [allUserMessages, soundEnabled]);
 
   // CMS/Game state configs
   const [editingGameId, setEditingGameId] = useState<string>('');
@@ -413,10 +489,22 @@ export const AdminPanel: React.FC = () => {
   // Copy success indicator
   const [copiedTextId, setCopiedTextId] = useState<string | null>(null);
 
+  // Auto select active ticket if none selected
+  useEffect(() => {
+    if (!activeTicketId && tickets && tickets.length > 0) {
+      const openTicket = tickets.find(t => t.status !== 'resolved') || tickets[0];
+      if (openTicket?.id) {
+        setActiveTicketId(openTicket.id);
+      }
+    }
+  }, [tickets, activeTicketId]);
+
   // Auto scroll chat
   useEffect(() => {
     if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      setTimeout(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
     }
   }, [tickets, activeTicketId]);
 
@@ -1486,18 +1574,151 @@ export const AdminPanel: React.FC = () => {
 
           {/* TAB 4: MESSAGE HISTORY (LIVE HELP CHATS) */}
           {activeTab === 'support' && (
-            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+            <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4 relative">
+              
+              {/* Floating Instant Toast Banner when User sends a Message */}
+              {latestToast && (
+                <div className="fixed top-20 right-6 z-[250] bg-slate-900 border-2 border-indigo-500 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-top duration-300 max-w-md">
+                  <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-base shrink-0 animate-bounce">
+                    <BellRing className="h-5 w-5 text-amber-300" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-indigo-400 uppercase tracking-wider">New User Message</span>
+                      <span className="text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-800 px-2 py-0.5 rounded-md">@{latestToast.username}</span>
+                    </div>
+                    <p className="text-xs text-slate-200 font-medium truncate mt-0.5">{latestToast.text}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setActiveTicketId(latestToast.ticketId);
+                      setIsSidebarHidden(true);
+                      setLatestToast(null);
+                    }}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl transition-all shadow-sm cursor-pointer shrink-0"
+                  >
+                    View Chat
+                  </button>
+                  <button onClick={() => setLatestToast(null)} className="text-slate-400 hover:text-white p-1">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* Main Support Section Header */}
+              <div className="flex flex-wrap justify-between items-center border-b border-slate-100 pb-3 gap-3">
                 <div>
-                  <h3 className="text-lg font-black text-slate-800">Support Communications</h3>
-                  <p className="text-xs text-slate-500">Resolve real-time help tickets and user enquiries</p>
+                  <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                    <span>Support Communications</span>
+                    {allUserMessages.length > 0 && (
+                      <span className="text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-2.5 py-0.5 rounded-full font-mono">
+                        {allUserMessages.length} User Messages
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-slate-500">Resolve real-time help tickets and user enquiries in full view</p>
+                </div>
+
+                <div className="flex items-center gap-2 relative">
+                  {/* Audio Chime Sound Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setSoundEnabled(!soundEnabled)}
+                    className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold ${
+                      soundEnabled 
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' 
+                        : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                    }`}
+                    title={soundEnabled ? "Audio alerts enabled for incoming user messages" : "Audio alerts muted"}
+                  >
+                    {soundEnabled ? <Volume2 className="h-4 w-4 text-emerald-600" /> : <VolumeX className="h-4 w-4 text-slate-400" />}
+                    <span className="hidden sm:inline">{soundEnabled ? "Sound ON" : "Muted"}</span>
+                  </button>
+
+                  {/* Bell Notification Dropdown Button */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowBellDropdown(!showBellDropdown)}
+                      className="p-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-extrabold transition-all cursor-pointer flex items-center gap-2 relative shadow-xs"
+                      title="User Message Notifications"
+                    >
+                      <Bell className="h-4 w-4 text-indigo-600" />
+                      <span className="hidden sm:inline text-xs">Notifications</span>
+                      {allUserMessages.length > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 h-5 min-w-[20px] px-1 bg-rose-600 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-md animate-pulse">
+                          {allUserMessages.length}
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Bell Notification Popup Menu */}
+                    {showBellDropdown && (
+                      <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[200] p-3 space-y-2 animate-in fade-in duration-150">
+                        <div className="flex justify-between items-center border-b border-slate-100 pb-2 px-1">
+                          <div className="flex items-center gap-2">
+                            <Bell className="h-4 w-4 text-indigo-600" />
+                            <span className="text-xs font-black text-slate-800 uppercase tracking-wide">Live User Messages</span>
+                          </div>
+                          <button onClick={() => setShowBellDropdown(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+
+                        <div className="max-h-80 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                          {allUserMessages.length === 0 ? (
+                            <p className="text-xs text-slate-400 text-center py-6">No user messages received yet.</p>
+                          ) : (
+                            allUserMessages.map((msg, idx) => (
+                              <div
+                                key={msg.id ? `notif-${msg.id}-${idx}` : idx}
+                                onClick={() => {
+                                  setActiveTicketId(msg.ticketId);
+                                  setIsSidebarHidden(true); // Auto hide side panel to show chat full width
+                                  setShowBellDropdown(false);
+                                }}
+                                className="p-2.5 rounded-xl bg-slate-50 hover:bg-indigo-50/60 border border-slate-200 hover:border-indigo-300 transition-all cursor-pointer flex justify-between items-start gap-2"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded">@{msg.username}</span>
+                                    <span className="text-[9px] font-mono text-slate-400">#{msg.ticketId}</span>
+                                  </div>
+                                  <p className="text-xs font-medium text-slate-700 truncate">{msg.text}</p>
+                                </div>
+                                <span className="text-[9px] font-mono text-slate-400 shrink-0">
+                                  {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Toggle Side Panel Button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsSidebarHidden(!isSidebarHidden)}
+                    className={`px-3.5 py-2 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
+                      isSidebarHidden
+                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                    }`}
+                    title={isSidebarHidden ? "Show side panel tickets list" : "Hide side panel tickets list"}
+                  >
+                    {isSidebarHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                    <span>{isSidebarHidden ? "Show Tickets List" : "Hide Side Panel"}</span>
+                  </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className={`grid grid-cols-1 ${isSidebarHidden ? 'lg:grid-cols-1' : 'lg:grid-cols-3'} gap-6 min-h-[750px] lg:h-[calc(100vh-180px)]`}>
                 
                 {/* Tickets column */}
-                <div className="space-y-4 max-h-[700px] flex flex-col">
+                {!isSidebarHidden && (
+                  <div className="space-y-4 flex flex-col h-full overflow-hidden">
                   {/* Search bar inside support tab */}
                   <div className="relative">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -1687,9 +1908,10 @@ export const AdminPanel: React.FC = () => {
                     })()}
                   </div>
                 </div>
+                )}
 
-                {/* Messages Timeline column */}
-                <div className="lg:col-span-2 bg-slate-50 rounded-3xl border border-slate-200 p-4 h-[700px] flex flex-col justify-between shadow-inner">
+                {/* Messages Timeline column (Expands to 100% full width when sidebar is hidden) */}
+                <div className={`${isSidebarHidden ? 'lg:col-span-1 w-full' : 'lg:col-span-2'} bg-slate-50 rounded-3xl border border-slate-200 p-4 sm:p-6 h-full min-h-[650px] flex flex-col min-h-0 shadow-inner overflow-hidden relative`}>
                   {activeTicketId ? (
                     <>
                       {(() => {
@@ -1697,12 +1919,23 @@ export const AdminPanel: React.FC = () => {
                         if (!activeTicket) return null;
                         return (
                           <>
-                            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+                            <div className="flex justify-between items-center border-b border-slate-200 pb-3 shrink-0">
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-sm">
+                                {isSidebarHidden && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setIsSidebarHidden(false)}
+                                    className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 font-extrabold text-xs rounded-xl flex items-center gap-1 transition-all cursor-pointer shrink-0 border border-indigo-200"
+                                    title="Show side panel with all tickets"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                    <span>Tickets</span>
+                                  </button>
+                                )}
+                                <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-sm shrink-0">
                                   {activeTicket.username ? activeTicket.username.charAt(0).toUpperCase() : 'U'}
                                 </div>
-                                <div>
+                                <div className="min-w-0">
                                   <div className="flex flex-wrap items-center gap-1.5">
                                     <span className="text-[10px] font-mono text-indigo-500">#{activeTicket.id}</span>
                                     <span className="text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg">
@@ -1712,7 +1945,7 @@ export const AdminPanel: React.FC = () => {
                                       const activeUser = users.find(u => u.id === activeTicket.userId) || (activeTicket.username ? users.find(u => u.username && u.username.toLowerCase() === activeTicket.username.toLowerCase()) : undefined);
                                       if (activeUser?.email) {
                                         return (
-                                          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg font-mono">
+                                          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg font-mono truncate max-w-[160px] sm:max-w-none">
                                             {activeUser.email}
                                           </span>
                                         );
@@ -1721,22 +1954,31 @@ export const AdminPanel: React.FC = () => {
                                     })()}
                                   </div>
                                   {activeTicket.title && activeTicket.title !== 'MGM Live Direct Support' && activeTicket.title !== 'live support' ? (
-                                    <h4 className="text-xs font-extrabold text-slate-800 uppercase mt-0.5">{activeTicket.title}</h4>
+                                    <h4 className="text-xs font-extrabold text-slate-800 uppercase mt-0.5 truncate">{activeTicket.title}</h4>
                                   ) : (
                                     <h4 className="text-xs font-extrabold text-slate-500 uppercase mt-0.5">Live Support Session</h4>
                                   )}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setIsFullScreenChat(true)}
+                                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] sm:text-xs rounded-xl flex items-center gap-1 transition-all cursor-pointer shadow-xs"
+                                  title="Open Full Screen Chat"
+                                >
+                                  <Maximize2 className="h-3.5 w-3.5" />
+                                  <span className="hidden sm:inline">Full Screen</span>
+                                </button>
                                 {activeTicket.takenByAdmin || activeTicket.adminReplied ? (
                                   <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1">
                                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    👤 Admin Active (Auto-off)
+                                    <span className="hidden md:inline">👤 Admin Active (Auto-off)</span>
                                   </span>
                                 ) : (
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] text-slate-500 font-bold bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full flex items-center gap-1 font-mono">
-                                      🤖 Auto-bot Active
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] text-slate-500 font-bold bg-slate-100 border border-slate-200 px-2 py-1 rounded-full flex items-center gap-1 font-mono">
+                                      🤖 Auto-bot
                                     </span>
                                     <button
                                       type="button"
@@ -1752,9 +1994,9 @@ export const AdminPanel: React.FC = () => {
                                           console.error('Error claiming ticket:', err);
                                         }
                                       }}
-                                      className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-full transition-all cursor-pointer shadow-sm hover:shadow"
+                                      className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-full transition-all cursor-pointer shadow-sm hover:shadow"
                                     >
-                                      Take Over Chat
+                                      Take Over
                                     </button>
                                   </div>
                                 )}
@@ -1762,18 +2004,18 @@ export const AdminPanel: React.FC = () => {
                             </div>
 
                             {/* Timeline messages */}
-                            <div className="flex-1 overflow-y-auto my-3 pr-1 space-y-3">
+                            <div className="flex-1 min-h-0 overflow-y-auto my-3 pr-2 space-y-4 custom-scrollbar">
                               {(activeTicket.messages || []).map((m, idx) => {
                                 const isSupportSender = m.sender === 'support';
                                 const isImage = m.fileUrl && (m.fileUrl.startsWith('data:image/') || m.fileName?.match(/\.(jpg|jpeg|png|gif|webp|svg)/i));
                                 return (
                                   <div key={m.id ? `${m.id}-${idx}` : idx} className={`flex ${isSupportSender ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`p-3 max-w-sm rounded-2xl border text-xs leading-relaxed ${
+                                    <div className={`p-4 ${isSidebarHidden ? 'max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl' : 'max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl'} rounded-2xl border text-xs sm:text-sm leading-relaxed ${
                                       isSupportSender
                                         ? 'bg-indigo-600 text-white border-indigo-600 rounded-tr-none shadow-sm'
                                         : 'bg-white border-slate-200 text-slate-800 rounded-tl-none shadow-xs'
                                     }`}>
-                                      <span className={`block text-[8px] uppercase tracking-wider mb-1 font-bold ${
+                                      <span className={`block text-[9px] uppercase tracking-wider mb-1 font-bold ${
                                         isSupportSender ? 'text-indigo-200' : 'text-slate-400'
                                       }`}>
                                         {m.senderName}
@@ -1782,31 +2024,31 @@ export const AdminPanel: React.FC = () => {
                                       
                                       {/* File / Image Attachment Preview */}
                                       {isImage && (
-                                        <div className="mt-2 rounded-xl overflow-hidden border border-slate-200/80 max-w-[260px] shadow-sm bg-slate-100">
+                                        <div className="mt-2.5 rounded-xl overflow-hidden border border-slate-200/80 max-w-[320px] shadow-sm bg-slate-100">
                                           <a href={m.fileUrl} target="_blank" rel="noreferrer" className="block cursor-pointer">
-                                            <img referrerPolicy="no-referrer" src={m.fileUrl} alt={m.fileName || 'Attachment'} className="w-full h-auto max-h-60 object-cover hover:opacity-95 transition-opacity" />
+                                            <img referrerPolicy="no-referrer" src={m.fileUrl} alt={m.fileName || 'Attachment'} className="w-full h-auto max-h-72 object-cover hover:opacity-95 transition-opacity" />
                                           </a>
-                                          <div className="p-1.5 bg-slate-200/90 text-[10px] text-center text-slate-700 font-mono font-bold truncate">
+                                          <div className="p-2 bg-slate-200/90 text-[10px] text-center text-slate-700 font-mono font-bold truncate">
                                             {m.fileName || 'Image Attachment'}
                                           </div>
                                         </div>
                                       )}
 
                                       {m.fileUrl && !isImage && (
-                                        <div className={`mt-2 p-2 rounded-xl flex items-center gap-2 text-[10px] font-mono border ${
+                                        <div className={`mt-2.5 p-2.5 rounded-xl flex items-center gap-2.5 text-[11px] font-mono border ${
                                           isSupportSender ? 'bg-indigo-700/60 border-indigo-500 text-indigo-100' : 'bg-slate-100 border-slate-200 text-slate-700'
                                         }`}>
                                           <FileText className="h-4 w-4 shrink-0" />
-                                          <a href={m.fileUrl} target="_blank" rel="noreferrer" className="truncate max-w-[180px] font-bold hover:underline">
+                                          <a href={m.fileUrl} target="_blank" rel="noreferrer" className="truncate max-w-[220px] font-bold hover:underline">
                                             {m.fileName || 'Document Attachment'}
                                           </a>
                                         </div>
                                       )}
 
-                                      <span className={`block text-[8px] mt-1.5 text-right ${
+                                      <span className={`block text-[9px] mt-1.5 text-right font-mono ${
                                         isSupportSender ? 'text-indigo-300' : 'text-slate-400'
                                       }`}>
-                                        {m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : 'N/A'}
+                                        {m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                                       </span>
                                     </div>
                                   </div>
@@ -1816,7 +2058,7 @@ export const AdminPanel: React.FC = () => {
                             </div>
 
                             {/* Reply Input */}
-                            <form onSubmit={handleAdminReplyText} className="flex flex-col gap-2 pt-2 border-t border-slate-200">
+                            <form onSubmit={handleAdminReplyText} className="flex flex-col gap-2 pt-3 border-t border-slate-200 bg-slate-50 shrink-0">
                               {adminFile && (
                                 <div className="flex items-center justify-between bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl text-xs text-indigo-700 font-mono">
                                   <span className="truncate max-w-xs font-bold">Attachment: {adminFile.name}</span>
@@ -1829,7 +2071,7 @@ export const AdminPanel: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => adminFileInputRef.current?.click()}
-                                  className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors cursor-pointer shrink-0"
+                                  className="p-3 bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl transition-colors cursor-pointer shrink-0 shadow-xs"
                                   title="Attach file or photo"
                                 >
                                   <Paperclip className="h-4 w-4" />
@@ -1854,16 +2096,148 @@ export const AdminPanel: React.FC = () => {
                                   placeholder="Write message reply..."
                                   value={adminReplyText}
                                   onChange={(e) => setAdminReplyText(e.target.value)}
-                                  className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                                  className="flex-1 px-4 py-3 bg-white rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 shadow-xs font-medium"
                                 />
                                 <button
                                   type="submit"
-                                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs uppercase cursor-pointer transition-colors shrink-0"
+                                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl text-xs sm:text-sm uppercase tracking-wide cursor-pointer transition-colors shrink-0 shadow-sm"
                                 >
                                   Send Reply
                                 </button>
                               </div>
                             </form>
+
+                            {/* FULL SCREEN CHAT MODAL OVERLAY */}
+                            {isFullScreenChat && (
+                              <div className="fixed inset-0 z-[200] bg-slate-950/95 backdrop-blur-xl p-3 sm:p-6 flex flex-col justify-between overflow-hidden animate-in fade-in duration-150">
+                                {/* Full Screen Header */}
+                                <div className="flex justify-between items-center bg-slate-900 border border-slate-800 p-4 rounded-2xl shrink-0">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-base shadow-sm shrink-0">
+                                      {activeTicket.username ? activeTicket.username.charAt(0).toUpperCase() : 'U'}
+                                    </div>
+                                    <div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-xs font-mono text-indigo-400">#{activeTicket.id}</span>
+                                        <span className="text-sm font-black text-indigo-300 bg-indigo-950/80 border border-indigo-800/80 px-2.5 py-0.5 rounded-lg">
+                                          @{activeTicket.username}
+                                        </span>
+                                        {(() => {
+                                          const activeUser = users.find(u => u.id === activeTicket.userId) || (activeTicket.username ? users.find(u => u.username && u.username.toLowerCase() === activeTicket.username.toLowerCase()) : undefined);
+                                          if (activeUser?.email) {
+                                            return (
+                                              <span className="text-xs font-bold text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-0.5 rounded-lg font-mono">
+                                                {activeUser.email}
+                                              </span>
+                                            );
+                                          }
+                                          return null;
+                                        })()}
+                                      </div>
+                                      <p className="text-xs text-slate-400 mt-0.5 font-bold uppercase tracking-wider">FULL SCREEN LIVE SUPPORT CHAT</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={() => setIsFullScreenChat(false)}
+                                      className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-extrabold text-xs sm:text-sm rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+                                    >
+                                      <Minimize2 className="h-4 w-4 text-slate-300" />
+                                      <span>Exit Full Screen</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Full screen Timeline messages */}
+                                <div className="flex-1 min-h-0 overflow-y-auto my-3 p-4 sm:p-8 bg-slate-900/90 rounded-2xl border border-slate-800/80 space-y-4 custom-scrollbar">
+                                  {(activeTicket.messages || []).map((m, idx) => {
+                                    const isSupportSender = m.sender === 'support';
+                                    const isImage = m.fileUrl && (m.fileUrl.startsWith('data:image/') || m.fileName?.match(/\.(jpg|jpeg|png|gif|webp|svg)/i));
+                                    return (
+                                      <div key={m.id ? `fs-${m.id}-${idx}` : `fs-${idx}`} className={`flex ${isSupportSender ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={`p-4 max-w-xl md:max-w-2xl lg:max-w-3xl xl:max-w-4xl rounded-2xl border text-sm sm:text-base leading-relaxed ${
+                                          isSupportSender
+                                            ? 'bg-indigo-600 text-white border-indigo-500 rounded-tr-none shadow-md'
+                                            : 'bg-slate-800 border-slate-700 text-slate-100 rounded-tl-none shadow-sm'
+                                        }`}>
+                                          <span className={`block text-[10px] uppercase tracking-wider mb-1 font-bold ${
+                                            isSupportSender ? 'text-indigo-200' : 'text-indigo-400'
+                                          }`}>
+                                            {m.senderName}
+                                          </span>
+                                          <p className="font-sans whitespace-pre-wrap">{m.text}</p>
+                                          
+                                          {isImage && (
+                                            <div className="mt-3 rounded-xl overflow-hidden border border-slate-700/80 max-w-lg shadow-md bg-slate-950">
+                                              <a href={m.fileUrl} target="_blank" rel="noreferrer" className="block cursor-pointer">
+                                                <img referrerPolicy="no-referrer" src={m.fileUrl} alt={m.fileName || 'Attachment'} className="w-full h-auto max-h-[450px] object-contain hover:opacity-95 transition-opacity" />
+                                              </a>
+                                              <div className="p-2 bg-slate-900 text-xs text-center text-slate-300 font-mono font-bold truncate">
+                                                {m.fileName || 'Image Attachment'}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {m.fileUrl && !isImage && (
+                                            <div className={`mt-3 p-3 rounded-xl flex items-center gap-3 text-xs font-mono border ${
+                                              isSupportSender ? 'bg-indigo-700/80 border-indigo-400 text-indigo-50' : 'bg-slate-900 border-slate-700 text-slate-200'
+                                            }`}>
+                                              <FileText className="h-5 w-5 shrink-0" />
+                                              <a href={m.fileUrl} target="_blank" rel="noreferrer" className="truncate max-w-md font-bold hover:underline">
+                                                {m.fileName || 'Document Attachment'}
+                                              </a>
+                                            </div>
+                                          )}
+
+                                          <span className={`block text-[10px] mt-2 text-right font-mono ${
+                                            isSupportSender ? 'text-indigo-300' : 'text-slate-400'
+                                          }`}>
+                                            {m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                  <div ref={chatEndRef} />
+                                </div>
+
+                                {/* Full Screen Reply Input */}
+                                <form onSubmit={handleAdminReplyText} className="flex flex-col gap-2 p-3 bg-slate-900 border border-slate-800 rounded-2xl shrink-0">
+                                  {adminFile && (
+                                    <div className="flex items-center justify-between bg-indigo-950/80 border border-indigo-700/80 px-4 py-2 rounded-xl text-xs text-indigo-200 font-mono">
+                                      <span className="truncate max-w-md font-bold">Attachment: {adminFile.name}</span>
+                                      <button type="button" onClick={() => setAdminFile(null)} className="text-slate-400 hover:text-red-400 cursor-pointer">
+                                        <X className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  )}
+                                  <div className="flex gap-3 items-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => adminFileInputRef.current?.click()}
+                                      className="p-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl transition-colors cursor-pointer shrink-0 shadow-xs"
+                                      title="Attach file or photo"
+                                    >
+                                      <Paperclip className="h-5 w-5" />
+                                    </button>
+                                    <input
+                                      type="text"
+                                      placeholder="Write message reply in full screen mode..."
+                                      value={adminReplyText}
+                                      onChange={(e) => setAdminReplyText(e.target.value)}
+                                      className="flex-1 px-5 py-3.5 bg-slate-950 rounded-xl border border-slate-700 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 font-medium"
+                                    />
+                                    <button
+                                      type="submit"
+                                      className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl text-sm uppercase tracking-wide cursor-pointer transition-colors shrink-0 shadow-md"
+                                    >
+                                      Send Reply
+                                    </button>
+                                  </div>
+                                </form>
+                              </div>
+                            )}
                           </>
                         );
                       })()}

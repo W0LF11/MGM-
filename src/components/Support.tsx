@@ -17,7 +17,9 @@ import {
   RotateCcw,
   Folder,
   Camera,
-  HardDrive
+  HardDrive,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { SupportTicket, SupportMessage } from '../types';
 
@@ -34,6 +36,7 @@ export const Support: React.FC = () => {
   const [chatInput, setChatInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
   
   // Feedback states
   const [rating, setRating] = useState<number>(0);
@@ -241,8 +244,12 @@ export const Support: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-none px-4 sm:px-6 lg:px-8 py-2" id="support-panel-main">
-      <div className="w-full max-w-4xl mx-auto h-[calc(100vh-145px)] min-h-[600px] glass rounded-3xl overflow-hidden shadow-xl flex flex-col">
+    <div className={`w-full max-w-none ${isFullScreen ? 'fixed inset-0 z-[100] bg-slate-950 p-2 sm:p-4 overflow-hidden' : 'px-2 sm:px-4 lg:px-6 py-2'}`} id="support-panel-main">
+      <div className={`w-full mx-auto glass shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${
+        isFullScreen 
+          ? 'h-full rounded-2xl border border-slate-800 bg-slate-950/95' 
+          : 'max-w-6xl xl:max-w-7xl h-[calc(100vh-125px)] min-h-[700px] rounded-3xl'
+      }`}>
         
         {activeTicket ? (
           <div className="flex flex-col h-full min-h-0 bg-slate-950/20">
@@ -283,6 +290,21 @@ export const Support: React.FC = () => {
                   title="Search Messages"
                 >
                   <Search className="h-3.5 w-3.5" />
+                </button>
+
+                {/* Full Screen Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsFullScreen(!isFullScreen)}
+                  className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold border cursor-pointer ${
+                    isFullScreen 
+                      ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-black shadow-md' 
+                      : 'text-slate-300 hover:text-white bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                  }`}
+                  title={isFullScreen ? "Exit Full Screen" : "Open Full Screen Chat"}
+                >
+                  {isFullScreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                  <span className="hidden sm:inline">{isFullScreen ? "Exit Full Screen" : "Full Screen"}</span>
                 </button>
               </div>
             </div>
@@ -333,7 +355,7 @@ export const Support: React.FC = () => {
                       </div>
                     )}
 
-                    <div className={`max-w-[72%] space-y-1 ${isMe ? 'text-right' : 'text-left'}`}>
+                    <div className={`max-w-[85%] sm:max-w-[80%] md:max-w-[75%] space-y-1 ${isMe ? 'text-right' : 'text-left'}`}>
                       {/* Sender Name header */}
                       {!isSameSender && (
                         <div className="text-[10px] text-slate-400 font-bold font-mono tracking-wider flex items-center gap-1.5 px-1">
