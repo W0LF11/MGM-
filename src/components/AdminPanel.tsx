@@ -22,6 +22,7 @@ import {
   Search, 
   Check, 
   X, 
+  ArrowLeft,
   ArrowUpRight, 
   ArrowDownLeft, 
   MessageSquare, 
@@ -96,6 +97,7 @@ export const AdminPanel: React.FC = () => {
     adminInjectJackpotWinner,
     adminInjectJackpotTicket,
     jackpotTickets = [],
+    setTickets,
     currentRole,
     logout
   } = usePlatform();
@@ -1789,7 +1791,22 @@ export const AdminPanel: React.FC = () => {
                         email: u.email
                       }));
 
-                      const combinedList = [...filteredTickets, ...virtualTickets];
+                      // WhatsApp-style sorting: ticket with latest message jumps to the top!
+                      const getLatestTime = (t: SupportTicket) => {
+                        if (t.messages && t.messages.length > 0) {
+                          const lastMsg = t.messages[t.messages.length - 1];
+                          const time = lastMsg.timestamp ? new Date(lastMsg.timestamp).getTime() : 0;
+                          if (!isNaN(time) && time > 0) return time;
+                        }
+                        const updateTime = t.updatedAt ? new Date(t.updatedAt).getTime() : 0;
+                        if (!isNaN(updateTime) && updateTime > 0) return updateTime;
+                        const createTime = t.createdAt ? new Date(t.createdAt).getTime() : 0;
+                        if (!isNaN(createTime) && createTime > 0) return createTime;
+                        return 0;
+                      };
+
+                      const sortedFilteredTickets = [...filteredTickets].sort((a, b) => getLatestTime(b) - getLatestTime(a));
+                      const combinedList = [...sortedFilteredTickets, ...virtualTickets];
 
                       if (combinedList.length === 0) {
                         return (
@@ -1812,6 +1829,12 @@ export const AdminPanel: React.FC = () => {
                           const ticketUser = users.find(u => u.id === t.userId) || (t.username ? users.find(u => u.username && u.username.toLowerCase() === t.username.toLowerCase()) : undefined);
                           userEmail = ticketUser?.email || 'No email available';
                         }
+
+                        // Get latest message snippet and time (WhatsApp style)
+                        const lastMsg = t.messages && t.messages.length > 0 ? t.messages[t.messages.length - 1] : null;
+                        const lastMsgTime = lastMsg?.timestamp 
+                          ? new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : ((t as any).updatedAt ? new Date((t as any).updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
                         
                         return (
                           <div
@@ -1854,15 +1877,15 @@ export const AdminPanel: React.FC = () => {
                                 setActiveTicketId(t.id);
                               }
                             }}
-                            className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                            className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
                               isSelected 
-                                ? 'bg-indigo-50/40 border-indigo-500 shadow-sm' 
-                                : 'bg-white border-slate-200 hover:border-slate-300'
+                                ? 'bg-indigo-50/50 border-indigo-500 shadow-sm ring-1 ring-indigo-300' 
+                                : 'bg-white border-slate-200 hover:border-indigo-200 hover:bg-slate-50/80'
                             }`}
                           >
-                             <div className="flex justify-between items-center">
-                              <div className="flex flex-col gap-0.5">
-                                <span className="text-[10px] font-mono font-black text-indigo-600">#{t.id}</span>
+                             <div className="flex justify-between items-center mb-1.5">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-[10px] font-mono font-black text-indigo-600 shrink-0">#{t.id}</span>
                                 {!isVirtual && !isClosed && (
                                   <span className={`text-[8px] font-extrabold px-1 py-0.5 rounded ${
                                     (t as any).takenByAdmin || (t as any).adminReplied 
@@ -1873,34 +1896,50 @@ export const AdminPanel: React.FC = () => {
                                   </span>
                                 )}
                               </div>
-                              <span className={`text-[8px] font-bold px-1.5 py-0.2 rounded border uppercase ${
-                                isVirtual
-                                  ? 'bg-amber-50 border-amber-200 text-amber-600'
-                                  : isClosed 
-                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
-                                    : 'bg-rose-50 border-rose-200 text-rose-600 animate-pulse'
-                              }`}>
-                                {isVirtual ? 'Ready to Chat' : t.status}
-                              </span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {lastMsgTime && (
+                                  <span className="text-[9px] font-mono text-slate-400 font-medium">{lastMsgTime}</span>
+                                )}
+                                <span className={`text-[8px] font-bold px-1.5 py-0.2 rounded border uppercase ${
+                                  isVirtual
+                                    ? 'bg-amber-50 border-amber-200 text-amber-600'
+                                    : isClosed 
+                                      ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
+                                      : 'bg-rose-50 border-rose-200 text-rose-600 animate-pulse'
+                                }`}>
+                                  {isVirtual ? 'Ready' : t.status}
+                                </span>
+                              </div>
                             </div>
                             
-                            {/* Highlight the name of the user prominently */}
-                            <div className="mt-2.5 mb-2 p-2 bg-indigo-50/80 border border-indigo-100 rounded-xl flex items-center gap-2">
-                              <div className="w-5.5 h-5.5 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-[10px]">
-                                {t.username ? t.username.charAt(0).toUpperCase() : 'U'}
+                            {/* Highlight user profile */}
+                            <div className="p-2 bg-slate-50/90 border border-slate-100 rounded-xl flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
+                                  {t.username ? t.username.charAt(0).toUpperCase() : 'U'}
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="text-xs font-black text-slate-900 tracking-tight truncate block">
+                                    @{t.username}
+                                  </span>
+                                </div>
                               </div>
-                              <span className="text-xs font-black text-indigo-900 tracking-tight truncate">
-                                @{t.username}
-                              </span>
                             </div>
 
-                            {/* Hide MGM Live Direct Support & live support title text */}
-                            {t.title && t.title !== 'MGM Live Direct Support' && t.title !== 'live support' && (
-                              <h4 className="text-xs font-semibold text-slate-700 truncate mb-1">{t.title}</h4>
+                            {/* Latest Message Snippet (WhatsApp Style) */}
+                            {lastMsg && (
+                              <div className="mt-2 px-2 py-1.5 bg-slate-50 border border-slate-150 rounded-xl flex items-center gap-1.5">
+                                <span className="text-[10px] font-bold text-indigo-600 shrink-0">
+                                  {lastMsg.sender === 'user' ? 'User:' : 'You:'}
+                                </span>
+                                <p className="text-[11px] text-slate-600 truncate font-sans">
+                                  {lastMsg.text}
+                                </p>
+                              </div>
                             )}
 
-                            <p className="text-[10px] text-slate-400 font-mono truncate bg-slate-50 border border-slate-100 px-2 py-1.5 rounded-xl">
-                              Gmail: <span className="font-bold text-slate-600 font-sans">{userEmail}</span>
+                            <p className="mt-1.5 text-[10px] text-slate-400 font-mono truncate px-1">
+                              Email: <span className="font-bold text-slate-700 font-sans select-all">{userEmail}</span>
                             </p>
                           </div>
                         );
@@ -1919,8 +1958,22 @@ export const AdminPanel: React.FC = () => {
                         if (!activeTicket) return null;
                         return (
                           <>
-                            <div className="flex justify-between items-center border-b border-slate-200 pb-3 shrink-0">
-                              <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap justify-between items-center border-b border-slate-200 pb-3 gap-2 shrink-0">
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                {/* Dedicated Back Chat Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveTicketId('');
+                                    setIsSidebarHidden(false);
+                                  }}
+                                  className="px-3 py-1.5 bg-slate-200 hover:bg-indigo-600 hover:text-white text-slate-800 font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shrink-0 border border-slate-300 shadow-xs"
+                                  title="Return to full list of support chats"
+                                >
+                                  <ArrowLeft className="h-4 w-4" />
+                                  <span>Back to Chats</span>
+                                </button>
+
                                 {isSidebarHidden && (
                                   <button
                                     type="button"
@@ -1932,10 +1985,11 @@ export const AdminPanel: React.FC = () => {
                                     <span>Tickets</span>
                                   </button>
                                 )}
-                                <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-sm shrink-0">
+
+                                <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-xs shadow-sm shrink-0">
                                   {activeTicket.username ? activeTicket.username.charAt(0).toUpperCase() : 'U'}
                                 </div>
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <div className="flex flex-wrap items-center gap-1.5">
                                     <span className="text-[10px] font-mono text-indigo-500">#{activeTicket.id}</span>
                                     <span className="text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg">
@@ -1945,7 +1999,7 @@ export const AdminPanel: React.FC = () => {
                                       const activeUser = users.find(u => u.id === activeTicket.userId) || (activeTicket.username ? users.find(u => u.username && u.username.toLowerCase() === activeTicket.username.toLowerCase()) : undefined);
                                       if (activeUser?.email) {
                                         return (
-                                          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg font-mono truncate max-w-[160px] sm:max-w-none">
+                                          <span className="text-[11px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-lg font-mono break-all select-all">
                                             {activeUser.email}
                                           </span>
                                         );
@@ -1953,11 +2007,6 @@ export const AdminPanel: React.FC = () => {
                                       return null;
                                     })()}
                                   </div>
-                                  {activeTicket.title && activeTicket.title !== 'MGM Live Direct Support' && activeTicket.title !== 'live support' ? (
-                                    <h4 className="text-xs font-extrabold text-slate-800 uppercase mt-0.5 truncate">{activeTicket.title}</h4>
-                                  ) : (
-                                    <h4 className="text-xs font-extrabold text-slate-500 uppercase mt-0.5">Live Support Session</h4>
-                                  )}
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
@@ -1973,7 +2022,7 @@ export const AdminPanel: React.FC = () => {
                                 {activeTicket.takenByAdmin || activeTicket.adminReplied ? (
                                   <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1">
                                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    <span className="hidden md:inline">👤 Admin Active (Auto-off)</span>
+                                    <span className="hidden md:inline">👤 Admin Active</span>
                                   </span>
                                 ) : (
                                   <div className="flex items-center gap-1.5">
@@ -1983,6 +2032,12 @@ export const AdminPanel: React.FC = () => {
                                     <button
                                       type="button"
                                       onClick={async () => {
+                                        setTickets(prev => prev.map(t => t.id === activeTicket.id ? {
+                                          ...t,
+                                          takenByAdmin: true,
+                                          adminReplied: true,
+                                          updatedAt: new Date().toISOString()
+                                        } : t));
                                         try {
                                           const ticketRef = doc(db, 'tickets', activeTicket.id);
                                           await updateDoc(ticketRef, {
@@ -2020,7 +2075,7 @@ export const AdminPanel: React.FC = () => {
                                       }`}>
                                         {m.senderName}
                                       </span>
-                                      <p className="font-sans whitespace-pre-wrap">{m.text}</p>
+                                      <p className="font-sans whitespace-pre-wrap break-words [overflow-wrap:anywhere] max-w-full">{m.text}</p>
                                       
                                       {/* File / Image Attachment Preview */}
                                       {isImage && (

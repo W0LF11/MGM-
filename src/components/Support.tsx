@@ -30,7 +30,8 @@ export const Support: React.FC = () => {
     addMessageToTicket, 
     resolveTicket,
     setTicketTyping,
-    submitTicketRating
+    submitTicketRating,
+    setTickets
   } = usePlatform();
 
   const [chatInput, setChatInput] = useState('');
@@ -82,8 +83,15 @@ export const Support: React.FC = () => {
 
       try {
         const ticketRef = doc(db, 'tickets', ticketId);
-        const snap = await getDoc(ticketRef);
-        if (!snap.exists()) {
+        let existsOnRemote = false;
+        try {
+          const snap = await getDoc(ticketRef);
+          existsOnRemote = snap.exists();
+        } catch (e) {
+          console.warn('[Direct Chat] Remote lookup warning:', e);
+        }
+
+        if (!existsOnRemote) {
           const agents = ['Agent Emma', 'Agent Liam', 'Supervisor Sophia', 'Analyst Dave', 'VIP Concierge Chloe'];
           const randomAgent = agents[Math.floor(Math.random() * agents.length)];
           const newTicket: SupportTicket = {
@@ -108,7 +116,18 @@ export const Support: React.FC = () => {
               }
             ]
           };
-          await setDoc(ticketRef, newTicket);
+
+          // Optimistically update context state immediately
+          setTickets(prev => {
+            if (prev.some(t => t.id === ticketId)) return prev;
+            return [newTicket, ...prev];
+          });
+
+          try {
+            await setDoc(ticketRef, newTicket);
+          } catch (writeErr) {
+            console.warn('[Direct Chat] Remote write saved to local state:', writeErr);
+          }
         }
       } catch (err) {
         console.error('Error initializing direct chat:', err);
@@ -355,7 +374,7 @@ export const Support: React.FC = () => {
                       </div>
                     )}
 
-                    <div className={`max-w-[85%] sm:max-w-[80%] md:max-w-[75%] space-y-1 ${isMe ? 'text-right' : 'text-left'}`}>
+                    <div className={`max-w-[90%] sm:max-w-[85%] md:max-w-[80%] space-y-1 min-w-0 ${isMe ? 'text-right' : 'text-left'}`}>
                       {/* Sender Name header */}
                       {!isSameSender && (
                         <div className="text-[10px] text-slate-400 font-bold font-mono tracking-wider flex items-center gap-1.5 px-1">
@@ -366,7 +385,7 @@ export const Support: React.FC = () => {
                         </div>
                       )}
                       
-                      <div className={`p-3.5 rounded-2xl text-xs leading-relaxed inline-block relative border transition-all duration-300 whitespace-pre-line ${
+                      <div className={`p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed inline-block max-w-full break-words [overflow-wrap:anywhere] whitespace-pre-wrap relative border transition-all duration-300 text-left ${
                         isMe 
                           ? 'bg-gradient-to-tr from-emerald-500 to-teal-500 text-white border-emerald-400/20 shadow-md shadow-emerald-500/5 rounded-tr-none hover:shadow-lg' 
                           : 'bg-slate-100/70 dark:bg-slate-900/80 border-slate-200/50 dark:border-white/5 text-slate-700 dark:text-slate-300 rounded-tl-none shadow-xs'

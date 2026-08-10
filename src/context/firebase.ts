@@ -1,7 +1,14 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+
+// Mute internal SDK trace logging to prevent developer exception overlays on quota limits
+try {
+  setLogLevel('error');
+} catch (e) {
+  // Ignore
+}
 
 const app = initializeApp(firebaseConfig);
 export const db = initializeFirestore(app, {
@@ -46,9 +53,12 @@ export interface FirestoreErrorInfo {
   }
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): void {
+  const errStr = error instanceof Error ? error.message : String(error);
+  const isQuota = errStr.includes('resource-exhausted') || errStr.includes('Quota limit exceeded') || errStr.includes('Quota exceeded');
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errStr,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -63,6 +73,11 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+
+  if (isQuota) {
+    console.warn(`[Firestore Quota Notice] Quota limit reached for path '${path}' during ${operationType}. Operating with local state memory.`);
+    return;
+  }
+
+  console.warn(`[Firestore Notice] ${operationType} on '${path}' failed: ${errStr}`);
 }

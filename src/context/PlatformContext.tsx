@@ -45,6 +45,7 @@ interface PlatformContextType {
   requests: any[];
   bets: BetRecord[];
   tickets: SupportTicket[];
+  setTickets: React.Dispatch<React.SetStateAction<SupportTicket[]>>;
   announcements: Announcement[];
   faqs: FAQItem[];
   notifications: AppNotification[];
@@ -180,7 +181,14 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [requests, setRequests] = useState<any[]>([]);
   const [clearedTransactions, setClearedTransactions] = useState<Transaction[]>([]);
   const [bets, setBets] = useState<BetRecord[]>([]);
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [tickets, setTickets] = useState<SupportTicket[]>(() => {
+    try {
+      const cached = localStorage.getItem('app_support_tickets');
+      return cached ? JSON.parse(cached) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [faqs, setFaqs] = useState<FAQItem[]>(initialFAQs);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -193,6 +201,17 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const pendingRepliesRef = useRef<Set<string>>(new Set());
   const isRegisteringRef = useRef<boolean>(false);
+
+  // Sync tickets to localStorage for cache-first instant loading & quota resilience
+  useEffect(() => {
+    try {
+      if (tickets && tickets.length > 0) {
+        localStorage.setItem('app_support_tickets', JSON.stringify(tickets));
+      }
+    } catch (e) {
+      // Ignore storage errors
+    }
+  }, [tickets]);
 
   // Merge requests and clearedTransactions for UI backwards-compatibility
   const transactions: Transaction[] = React.useMemo(() => {
@@ -251,7 +270,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     
     if (isAdminUser) {
       const seedDatabaseIfNeeded = async () => {
+        if (localStorage.getItem('app_db_seeded_v3')) return;
         try {
+          localStorage.setItem('app_db_seeded_v3', 'true');
           // Pre-warm Games
           const diceSnap = await getDoc(doc(db, 'games', 'dice'));
           if (!diceSnap.exists()) {
@@ -634,10 +655,28 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       );
     }
 
+    const unsubDirectTicket = onSnapshot(doc(db, 'tickets', `CHAT_${uid}`), (snap) => {
+      if (snap.exists()) {
+        const directTicket = snap.data() as SupportTicket;
+        setTickets(prev => {
+          const index = prev.findIndex(t => t.id === directTicket.id);
+          if (index >= 0) {
+            const copy = [...prev];
+            copy[index] = directTicket;
+            return copy;
+          }
+          return [directTicket, ...prev];
+        });
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `tickets/CHAT_${uid}`);
+    });
+
     return () => {
       unsubProfile();
       unsubBank();
       unsubTickets();
+      unsubDirectTicket();
       unsubTransactions();
       unsubRequests();
       unsubAllBets();
@@ -1199,12 +1238,17 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Support Tickets
   const setTicketTyping = (ticketId: string, side: 'user' | 'support', isTyping: boolean) => {
+    setTickets(prev => prev.map(t => t.id === ticketId ? {
+      ...t,
+      [side === 'user' ? 'userIsTyping' : 'supportIsTyping']: isTyping
+    } : t));
+
     try {
       updateDoc(doc(db, 'tickets', ticketId), {
         [side === 'user' ? 'userIsTyping' : 'supportIsTyping']: isTyping
-      });
+      }).catch(() => {});
     } catch (err) {
-      console.error(err);
+      // Ignore background typing sync error
     }
   };
 
@@ -1252,7 +1296,14 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         ]
       };
 
-      await setDoc(doc(db, 'tickets', ticketId), newTicket);
+      setTickets(prev => [newTicket, ...prev]);
+
+      try {
+        await setDoc(doc(db, 'tickets', ticketId), newTicket);
+      } catch (e) {
+        console.warn('[Ticket Creation] Firestore write failed, using local state:', e);
+      }
+      
       addLocalNotification('Conversation Opened', `Your help chat #${ticketId} has been lodged. ${randomAgent} is joining.`, 'support');
 
       // Simulate live agent greeting
@@ -1265,24 +1316,43 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           ];
           const text = welcomeMsgs[Math.floor(Math.random() * welcomeMsgs.length)];
           
-          const tSnap = await getDoc(doc(db, 'tickets', ticketId));
-          if (tSnap.exists()) {
-            const data = tSnap.data() as SupportTicket;
-            const newAgentMsg: SupportMessage = {
-              id: genId(),
-              sender: 'support',
-              senderName: randomAgent,
-              text,
-              timestamp: formatDate(),
-              isRead: false,
-              isAuto: true
-            };
+          let data = newTicket;
+          try {
+            const tSnap = await getDoc(doc(db, 'tickets', ticketId));
+            if (tSnap.exists()) {
+              data = tSnap.data() as SupportTicket;
+            }
+          } catch (e) {
+            console.warn('[Ticket Auto-reply] Using local ticket data');
+          }
+
+          const newAgentMsg: SupportMessage = {
+            id: genId(),
+            sender: 'support',
+            senderName: randomAgent,
+            text,
+            timestamp: formatDate(),
+            isRead: false,
+            isAuto: true
+          };
+
+          setTickets(prev => prev.map(t => t.id === ticketId ? {
+            ...t,
+            messages: [...t.messages, newAgentMsg],
+            status: 'assigned',
+            updatedAt: formatDate(),
+            supportIsTyping: false
+          } : t));
+
+          try {
             await updateDoc(doc(db, 'tickets', ticketId), {
               messages: [...data.messages, newAgentMsg],
               status: 'assigned',
               updatedAt: formatDate(),
               supportIsTyping: false
             });
+          } catch (e) {
+            console.warn('[Ticket Auto-reply] Firestore write skipped');
           }
         }, 1500);
       }, 1000);
@@ -1296,10 +1366,22 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const addMessageToTicket = async (ticketId: string, text: string, sender: 'user' | 'support', file?: { name: string, url: string }) => {
     try {
       const ticketRef = doc(db, 'tickets', ticketId);
-      let tSnap = await getDoc(ticketRef);
-      let tData: SupportTicket;
+      let tData: SupportTicket | undefined;
 
-      if (!tSnap.exists()) {
+      try {
+        const tSnap = await getDoc(ticketRef);
+        if (tSnap.exists()) {
+          tData = tSnap.data() as SupportTicket;
+        }
+      } catch (getErr) {
+        console.warn('[Ticket Chat] Firestore getDoc failed, using local state:', getErr);
+      }
+
+      if (!tData) {
+        tData = tickets.find(t => t.id === ticketId);
+      }
+
+      if (!tData) {
         if (ticketId.startsWith('CHAT_') && currentUser) {
           const agents = ['Agent Emma', 'Agent Liam', 'Supervisor Sophia', 'Analyst Dave', 'VIP Concierge Chloe'];
           const randomAgent = agents[Math.floor(Math.random() * agents.length)];
@@ -1326,12 +1408,14 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               }
             ]
           };
-          await setDoc(ticketRef, tData);
+          try {
+            await setDoc(ticketRef, tData);
+          } catch (e) {
+            console.warn('[Ticket Chat] Initial setDoc fallback:', e);
+          }
         } else {
           return;
         }
-      } else {
-        tData = tSnap.data() as SupportTicket;
       }
 
       const newMessage: SupportMessage = {
@@ -1345,14 +1429,35 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         ...(file?.url ? { fileUrl: file.url } : {})
       };
 
-      const updatedMessages = [...tData.messages, newMessage];
+      const updatedMessages = [...(tData.messages || []), newMessage];
 
-      await updateDoc(ticketRef, {
+      // Update local React state immediately for instant feedback & quota resilience
+      const updatedTicketObj: SupportTicket = {
+        ...tData,
         messages: updatedMessages,
         updatedAt: formatDate(),
         status: sender === 'support' ? 'assigned' : tData.status,
         ...(sender === 'support' ? { adminReplied: true, takenByAdmin: true } : {})
+      };
+
+      setTickets(prev => {
+        const exists = prev.some(t => t.id === ticketId);
+        if (exists) {
+          return prev.map(t => t.id === ticketId ? updatedTicketObj : t);
+        }
+        return [...prev, updatedTicketObj];
       });
+
+      try {
+        await updateDoc(ticketRef, {
+          messages: updatedMessages,
+          updatedAt: formatDate(),
+          status: sender === 'support' ? 'assigned' : tData.status,
+          ...(sender === 'support' ? { adminReplied: true, takenByAdmin: true } : {})
+        });
+      } catch (writeErr) {
+        console.warn('[Ticket Chat] Firestore update fallback to local state:', writeErr);
+      }
 
       if (sender === 'support' && currentUser && tData.userId === currentUser.id) {
         addLocalNotification('New Support Reply', `A representative has replied to conversation #${ticketId}.`, 'support');
@@ -1370,7 +1475,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           if (userMessagesCount === 1) {
             const displayName = currentUser?.username || 'Valued Player';
             reply = `Hi ${displayName}! Welcome to MGM 澳門美高梅 Direct Live Support. 🌟
- 
+
 To ensure we assist you as efficiently as possible, please confirm or provide your details:
 • 👤 **Username**: ${currentUser?.username || 'Please type your preferred username'}
 • 📱 **Phone Number**: ${currentUser?.phone || 'Please type your active phone number'}
@@ -1387,9 +1492,21 @@ We have assigned you a dedicated chat support agent and he will shortly reply to
           setTimeout(async () => {
             setTicketTyping(ticketId, 'support', true);
             setTimeout(async () => {
-              const latestSnap = await getDoc(ticketRef);
-              if (latestSnap.exists()) {
-                const latestData = latestSnap.data() as SupportTicket;
+              let latestData: SupportTicket | undefined;
+              try {
+                const latestSnap = await getDoc(ticketRef);
+                if (latestSnap.exists()) {
+                  latestData = latestSnap.data() as SupportTicket;
+                }
+              } catch (e) {
+                console.warn('[Auto Reply] getDoc failed, using local state:', e);
+              }
+
+              if (!latestData) {
+                latestData = tickets.find(t => t.id === ticketId) || updatedTicketObj;
+              }
+
+              if (latestData) {
                 const adminMessagedInHistory = (latestData.messages || []).some(m => m.sender === 'support' && !m.isAuto);
                 const currentlyTaken = latestData.takenByAdmin || latestData.adminReplied || adminMessagedInHistory;
 
@@ -1403,14 +1520,28 @@ We have assigned you a dedicated chat support agent and he will shortly reply to
                     isRead: false,
                     isAuto: true
                   };
-                  await updateDoc(ticketRef, {
-                    messages: [...latestData.messages, autoMsg],
+
+                  const autoUpdatedTicket: SupportTicket = {
+                    ...latestData,
+                    messages: [...(latestData.messages || []), autoMsg],
                     updatedAt: formatDate(),
                     status: 'assigned',
                     supportIsTyping: false
-                  });
+                  };
+
+                  setTickets(prev => prev.map(t => t.id === ticketId ? autoUpdatedTicket : t));
+
+                  try {
+                    await updateDoc(ticketRef, {
+                      messages: [...(latestData.messages || []), autoMsg],
+                      updatedAt: formatDate(),
+                      status: 'assigned',
+                      supportIsTyping: false
+                    });
+                  } catch (e) {
+                    console.warn('[Auto Reply] updateDoc failed:', e);
+                  }
                 } else {
-                  // Admin has taken/replied to the chat while the timeout was pending. Stop typing.
                   setTicketTyping(ticketId, 'support', false);
                 }
               }
@@ -2115,6 +2246,7 @@ We have assigned you a dedicated chat support agent and he will shortly reply to
       requests,
       bets,
       tickets,
+      setTickets,
       announcements,
       faqs,
       notifications,
