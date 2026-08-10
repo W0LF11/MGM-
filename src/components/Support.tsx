@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { usePlatform } from '../context/PlatformContext';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../context/firebase';
@@ -8,6 +9,7 @@ import {
   Paperclip, 
   Image as ImageIcon, 
   Search, 
+  Check,
   CheckCheck, 
   Inbox, 
   X,
@@ -22,6 +24,7 @@ import {
   Minimize2
 } from 'lucide-react';
 import { SupportTicket, SupportMessage } from '../types';
+import { compressFileForChat } from '../utils/imageCompressor';
 
 export const Support: React.FC = () => {
   const { 
@@ -31,6 +34,7 @@ export const Support: React.FC = () => {
     resolveTicket,
     setTicketTyping,
     submitTicketRating,
+    markTicketMessagesAsRead,
     setTickets
   } = usePlatform();
 
@@ -182,6 +186,19 @@ export const Support: React.FC = () => {
     }
   }, [activeTicket, activeTicketMessagesLength, lastMessageSender]);
 
+  // Mark support messages as read when user views ticket
+  useEffect(() => {
+    if (activeTicket && activeTicket.messages && activeTicket.messages.length > 0 && currentUser) {
+      const uId = currentUser.id;
+      const hasUnreadSupportMsgs = activeTicket.messages.some(m => 
+        m.sender === 'support' && (!m.isRead || m.status !== 'seen' || !(m.readBy || []).includes(uId) || !(m.readBy || []).includes('user'))
+      );
+      if (hasUnreadSupportMsgs) {
+        markTicketMessagesAsRead(activeTicket.id, uId);
+      }
+    }
+  }, [activeTicket?.id, activeTicket?.messages, currentUser?.id, markTicketMessagesAsRead]);
+
   if (!currentUser) {
     return (
       <div className="text-center py-16" id="support-not-logged">
@@ -217,21 +234,23 @@ export const Support: React.FC = () => {
     }
   };
 
-  const handleRealFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRealFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !directTicketId) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      addMessageToTicket(
-        directTicketId, 
-        `Attached file: ${file.name}`, 
-        'user', 
-        { name: file.name, url: dataUrl }
-      );
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressFileForChat(file);
+      if (compressed.url) {
+        addMessageToTicket(
+          directTicketId, 
+          `Attached file: ${compressed.name}`, 
+          'user', 
+          { name: compressed.name, url: compressed.url }
+        );
+      }
+    } catch (err) {
+      console.error('[File Upload Error]', err);
+    }
 
     // Reset input value so re-selecting same file works
     e.target.value = '';
@@ -410,9 +429,10 @@ export const Support: React.FC = () => {
                         )}
                       </div>
 
-                      {/* Status/Timestamp footer */}
+                      {/* Timestamp & Read Receipt footer */}
                       <div className={`flex items-center gap-1.5 text-[9px] text-slate-400/80 font-mono mt-0.5 px-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                        <span>{new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>{m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                        {m.isEdited && <span className="italic text-[9px] text-amber-500/90 font-sans font-medium">(edited)</span>}
                       </div>
                     </div>
 

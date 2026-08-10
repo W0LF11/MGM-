@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { usePlatform } from '../context/PlatformContext';
 import { DiceSchedule, SupportTicket } from '../types';
+import { compressFileForChat } from '../utils/imageCompressor';
 import { DiceController } from './DiceController';
 import { GlobalDiceController } from './GlobalDiceController';
 import { 
@@ -21,6 +22,7 @@ import {
   Settings, 
   Search, 
   Check, 
+  CheckCheck,
   X, 
   ArrowLeft,
   ArrowUpRight, 
@@ -28,6 +30,7 @@ import {
   MessageSquare, 
   Plus, 
   Trash2, 
+  Pencil,
   FileText,
   Paperclip,
   Maximize2,
@@ -91,6 +94,9 @@ export const AdminPanel: React.FC = () => {
     adminCreateAnnouncement, 
     adminDeleteAnnouncement,
     addMessageToTicket,
+    editTicketMessage,
+    deleteTicketMessage,
+    markTicketMessagesAsRead,
     adminUpdateDiceSchedules,
     adminUpdateDiceManualFields,
     adminSendNotification,
@@ -179,6 +185,10 @@ export const AdminPanel: React.FC = () => {
   const [diceManualTimer, setDiceManualTimer] = useState<number | null>(null);
   const [diceManualResult, setDiceManualResult] = useState<string>('random');
   const [diceManualProfitRate, setDiceManualProfitRate] = useState<number | null>(null);
+
+  // Message editing state
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editingMsgText, setEditingMsgText] = useState<string>('');
 
   // Jackpot administration states
   const [manualTicketNumber, setManualTicketNumber] = useState('');
@@ -410,6 +420,21 @@ export const AdminPanel: React.FC = () => {
   const adminFileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const prevMsgCountRef = useRef<number>(-1);
+
+  // Mark customer messages as read when admin views ticket
+  useEffect(() => {
+    if (activeTicketId) {
+      const currentTicket = tickets.find(t => t.id === activeTicketId);
+      if (currentTicket && currentTicket.messages && currentTicket.messages.length > 0) {
+        const hasUnreadUserMsgs = currentTicket.messages.some(m => 
+          m.sender === 'user' && (!m.isRead || m.status !== 'seen' || !(m.readBy || []).includes('support'))
+        );
+        if (hasUnreadUserMsgs) {
+          markTicketMessagesAsRead(activeTicketId, 'support');
+        }
+      }
+    }
+  }, [activeTicketId, tickets, markTicketMessagesAsRead]);
 
   // Audio chime player for instant admin notification
   const playNotificationChime = () => {
@@ -1928,13 +1953,52 @@ export const AdminPanel: React.FC = () => {
 
                             {/* Latest Message Snippet (WhatsApp Style) */}
                             {lastMsg && (
-                              <div className="mt-2 px-2 py-1.5 bg-slate-50 border border-slate-150 rounded-xl flex items-center gap-1.5">
-                                <span className="text-[10px] font-bold text-indigo-600 shrink-0">
-                                  {lastMsg.sender === 'user' ? 'User:' : 'You:'}
-                                </span>
-                                <p className="text-[11px] text-slate-600 truncate font-sans">
-                                  {lastMsg.text}
-                                </p>
+                              <div className="mt-2 px-2 py-1.5 bg-slate-50 border border-slate-150 rounded-xl flex items-center justify-between gap-1.5">
+                                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                  <span className="text-[10px] font-bold text-indigo-600 shrink-0">
+                                    {lastMsg.sender === 'user' ? 'User:' : 'You:'}
+                                  </span>
+                                  <p className="text-[11px] text-slate-600 truncate font-sans">
+                                    {lastMsg.text}
+                                  </p>
+                                </div>
+                                {lastMsg.sender === 'support' ? (
+                                  <AnimatePresence mode="wait">
+                                    {(lastMsg.isRead || lastMsg.status === 'seen' || (lastMsg.readBy && (lastMsg.readBy.includes('user') || (t.userId && lastMsg.readBy.includes(t.userId))))) ? (
+                                      <motion.span 
+                                        key="seen"
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.8 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="flex items-center gap-0.5 text-[9px] font-bold text-sky-600 shrink-0 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200" 
+                                        title="Customer has seen this message"
+                                      >
+                                        <CheckCheck className="h-3 w-3 text-sky-600" />
+                                        <span>Seen</span>
+                                      </motion.span>
+                                    ) : (
+                                      <motion.span 
+                                        key="sent"
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.8 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="flex items-center gap-0.5 text-[9px] font-medium text-slate-500 shrink-0 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200" 
+                                        title="Sent"
+                                      >
+                                        <Check className="h-3 w-3 text-slate-400" />
+                                        <span>Sent</span>
+                                      </motion.span>
+                                    )}
+                                  </AnimatePresence>
+                                ) : (
+                                  !lastMsg.isRead && (
+                                    <span className="px-1.5 py-0.5 text-[9px] font-black bg-rose-500 text-white rounded-full shrink-0 animate-pulse">
+                                      New
+                                    </span>
+                                  )
+                                )}
                               </div>
                             )}
 
@@ -2063,19 +2127,86 @@ export const AdminPanel: React.FC = () => {
                               {(activeTicket.messages || []).map((m, idx) => {
                                 const isSupportSender = m.sender === 'support';
                                 const isImage = m.fileUrl && (m.fileUrl.startsWith('data:image/') || m.fileName?.match(/\.(jpg|jpeg|png|gif|webp|svg)/i));
+                                const isEditingThis = editingMsgId === m.id;
                                 return (
-                                  <div key={m.id ? `${m.id}-${idx}` : idx} className={`flex ${isSupportSender ? 'justify-end' : 'justify-start'}`}>
+                                  <div key={m.id ? `${m.id}-${idx}` : idx} className={`flex ${isSupportSender ? 'justify-end' : 'justify-start'} group relative`}>
                                     <div className={`p-4 ${isSidebarHidden ? 'max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl' : 'max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl'} rounded-2xl border text-xs sm:text-sm leading-relaxed ${
                                       isSupportSender
                                         ? 'bg-indigo-600 text-white border-indigo-600 rounded-tr-none shadow-sm'
                                         : 'bg-white border-slate-200 text-slate-800 rounded-tl-none shadow-xs'
                                     }`}>
-                                      <span className={`block text-[9px] uppercase tracking-wider mb-1 font-bold ${
-                                        isSupportSender ? 'text-indigo-200' : 'text-slate-400'
-                                      }`}>
-                                        {m.senderName}
-                                      </span>
-                                      <p className="font-sans whitespace-pre-wrap break-words [overflow-wrap:anywhere] max-w-full">{m.text}</p>
+                                      <div className="flex items-center justify-between gap-2 mb-1">
+                                        <span className={`block text-[9px] uppercase tracking-wider font-bold ${
+                                          isSupportSender ? 'text-indigo-200' : 'text-slate-400'
+                                        }`}>
+                                          {m.senderName}
+                                        </span>
+                                        <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                                          {!isEditingThis ? (
+                                            <>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setEditingMsgId(m.id);
+                                                  setEditingMsgText(m.text);
+                                                }}
+                                                className={`p-1 rounded hover:bg-black/20 transition-colors cursor-pointer ${
+                                                  isSupportSender ? 'text-indigo-200 hover:text-white' : 'text-slate-400 hover:text-slate-600'
+                                                }`}
+                                                title="Edit Message"
+                                              >
+                                                <Pencil className="h-3 w-3" />
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  if (window.confirm('Delete this message permanently from transcript?')) {
+                                                    deleteTicketMessage(activeTicket.id, m.id);
+                                                  }
+                                                }}
+                                                className="p-1 rounded hover:bg-rose-500/20 text-rose-300 hover:text-rose-100 transition-colors cursor-pointer"
+                                                title="Delete Message"
+                                              >
+                                                <Trash2 className="h-3 w-3" />
+                                              </button>
+                                            </>
+                                          ) : null}
+                                        </div>
+                                      </div>
+
+                                      {isEditingThis ? (
+                                        <div className="my-1.5 space-y-2">
+                                          <textarea
+                                            rows={3}
+                                            value={editingMsgText}
+                                            onChange={(e) => setEditingMsgText(e.target.value)}
+                                            className="w-full p-2 bg-slate-900/90 text-white border border-indigo-400 rounded-lg text-xs font-sans focus:outline-none focus:ring-1 focus:ring-indigo-300 resize-none"
+                                          />
+                                          <div className="flex items-center justify-end gap-1.5">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                if (editingMsgText.trim()) {
+                                                  editTicketMessage(activeTicket.id, m.id, editingMsgText);
+                                                  setEditingMsgId(null);
+                                                }
+                                              }}
+                                              className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[10px] rounded-md flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                                            >
+                                              <Check className="h-3 w-3" /> Save
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => setEditingMsgId(null)}
+                                              className="px-2.5 py-1 bg-slate-700 hover:bg-slate-800 text-slate-200 font-bold text-[10px] rounded-md flex items-center gap-1 cursor-pointer transition-colors"
+                                            >
+                                              <X className="h-3 w-3" /> Cancel
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <p className="font-sans whitespace-pre-wrap break-words [overflow-wrap:anywhere] max-w-full">{m.text}</p>
+                                      )}
                                       
                                       {/* File / Image Attachment Preview */}
                                       {isImage && (
@@ -2100,11 +2231,49 @@ export const AdminPanel: React.FC = () => {
                                         </div>
                                       )}
 
-                                      <span className={`block text-[9px] mt-1.5 text-right font-mono ${
-                                        isSupportSender ? 'text-indigo-300' : 'text-slate-400'
-                                      }`}>
-                                        {m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                                      </span>
+                                      <div className="flex items-center justify-end gap-1.5 mt-1.5">
+                                        <span className={`text-[9px] font-mono ${
+                                          isSupportSender ? 'text-indigo-300' : 'text-slate-400'
+                                        }`}>
+                                          {m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                                        </span>
+                                        {m.isEdited && (
+                                          <span className={`text-[9px] italic font-medium ${isSupportSender ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                            (edited)
+                                          </span>
+                                        )}
+                                        {isSupportSender ? (
+                                          <AnimatePresence mode="wait">
+                                            {(m.isRead || m.status === 'seen' || (m.readBy && (m.readBy.includes('user') || m.readBy.includes('seen') || (activeTicket && m.readBy.includes(activeTicket.userId))))) ? (
+                                              <motion.span
+                                                key="seen"
+                                                initial={{ opacity: 0, scale: 0.8 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                exit={{ opacity: 0, scale: 0.8 }}
+                                                transition={{ duration: 0.2 }}
+                                                className="flex items-center gap-0.5 text-[10px] font-extrabold text-sky-300 ml-1 bg-indigo-700/80 px-1.5 py-0.5 rounded border border-sky-300/40 shadow-xs"
+                                                title="Customer has seen this message"
+                                              >
+                                                <CheckCheck className="h-3.5 w-3.5 text-sky-300" />
+                                                <span>Seen</span>
+                                              </motion.span>
+                                            ) : (
+                                              <motion.span
+                                                key="sent"
+                                                initial={{ opacity: 0, scale: 0.8 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                exit={{ opacity: 0, scale: 0.8 }}
+                                                transition={{ duration: 0.2 }}
+                                                className="flex items-center gap-0.5 text-[10px] font-medium text-indigo-200/80 ml-1 bg-indigo-800/40 px-1.5 py-0.5 rounded border border-indigo-400/20"
+                                                title="Sent"
+                                              >
+                                                <Check className="h-3.5 w-3.5 text-indigo-300/70" />
+                                                <span>Sent</span>
+                                              </motion.span>
+                                            )}
+                                          </AnimatePresence>
+                                        ) : null}
+                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -2135,14 +2304,17 @@ export const AdminPanel: React.FC = () => {
                                   type="file"
                                   ref={adminFileInputRef}
                                   className="hidden"
-                                  onChange={(e) => {
+                                  onChange={async (e) => {
                                     const file = e.target.files?.[0];
                                     if (!file) return;
-                                    const reader = new FileReader();
-                                    reader.onload = (ev) => {
-                                      setAdminFile({ name: file.name, url: ev.target?.result as string });
-                                    };
-                                    reader.readAsDataURL(file);
+                                    try {
+                                      const compressed = await compressFileForChat(file);
+                                      if (compressed.url) {
+                                        setAdminFile({ name: compressed.name, url: compressed.url });
+                                      }
+                                    } catch (err) {
+                                      console.error('File compression error', err);
+                                    }
                                     e.target.value = '';
                                   }}
                                 />
@@ -2209,19 +2381,86 @@ export const AdminPanel: React.FC = () => {
                                   {(activeTicket.messages || []).map((m, idx) => {
                                     const isSupportSender = m.sender === 'support';
                                     const isImage = m.fileUrl && (m.fileUrl.startsWith('data:image/') || m.fileName?.match(/\.(jpg|jpeg|png|gif|webp|svg)/i));
+                                    const isEditingThis = editingMsgId === m.id;
                                     return (
-                                      <div key={m.id ? `fs-${m.id}-${idx}` : `fs-${idx}`} className={`flex ${isSupportSender ? 'justify-end' : 'justify-start'}`}>
+                                      <div key={m.id ? `fs-${m.id}-${idx}` : `fs-${idx}`} className={`flex ${isSupportSender ? 'justify-end' : 'justify-start'} group relative`}>
                                         <div className={`p-4 max-w-xl md:max-w-2xl lg:max-w-3xl xl:max-w-4xl rounded-2xl border text-sm sm:text-base leading-relaxed ${
                                           isSupportSender
                                             ? 'bg-indigo-600 text-white border-indigo-500 rounded-tr-none shadow-md'
                                             : 'bg-slate-800 border-slate-700 text-slate-100 rounded-tl-none shadow-sm'
                                         }`}>
-                                          <span className={`block text-[10px] uppercase tracking-wider mb-1 font-bold ${
-                                            isSupportSender ? 'text-indigo-200' : 'text-indigo-400'
-                                          }`}>
-                                            {m.senderName}
-                                          </span>
-                                          <p className="font-sans whitespace-pre-wrap">{m.text}</p>
+                                          <div className="flex items-center justify-between gap-2 mb-1">
+                                            <span className={`block text-[10px] uppercase tracking-wider font-bold ${
+                                              isSupportSender ? 'text-indigo-200' : 'text-indigo-400'
+                                            }`}>
+                                              {m.senderName}
+                                            </span>
+                                            <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                                              {!isEditingThis ? (
+                                                <>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setEditingMsgId(m.id);
+                                                      setEditingMsgText(m.text);
+                                                    }}
+                                                    className={`p-1 rounded hover:bg-black/20 transition-colors cursor-pointer ${
+                                                      isSupportSender ? 'text-indigo-200 hover:text-white' : 'text-slate-400 hover:text-slate-200'
+                                                    }`}
+                                                    title="Edit Message"
+                                                  >
+                                                    <Pencil className="h-3.5 w-3.5" />
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      if (window.confirm('Delete this message permanently from transcript?')) {
+                                                        deleteTicketMessage(activeTicket.id, m.id);
+                                                      }
+                                                    }}
+                                                    className="p-1 rounded hover:bg-rose-500/20 text-rose-300 hover:text-rose-100 transition-colors cursor-pointer"
+                                                    title="Delete Message"
+                                                  >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                  </button>
+                                                </>
+                                              ) : null}
+                                            </div>
+                                          </div>
+
+                                          {isEditingThis ? (
+                                            <div className="my-2 space-y-2">
+                                              <textarea
+                                                rows={3}
+                                                value={editingMsgText}
+                                                onChange={(e) => setEditingMsgText(e.target.value)}
+                                                className="w-full p-2.5 bg-slate-950 text-white border border-indigo-400 rounded-xl text-xs sm:text-sm font-sans focus:outline-none focus:ring-1 focus:ring-indigo-300 resize-none"
+                                              />
+                                              <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    if (editingMsgText.trim()) {
+                                                      editTicketMessage(activeTicket.id, m.id, editingMsgText);
+                                                      setEditingMsgId(null);
+                                                    }
+                                                  }}
+                                                  className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                                                >
+                                                  <Check className="h-3.5 w-3.5" /> Save
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setEditingMsgId(null)}
+                                                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-slate-200 font-bold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
+                                                >
+                                                  <X className="h-3.5 w-3.5" /> Cancel
+                                                </button>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <p className="font-sans whitespace-pre-wrap">{m.text}</p>
+                                          )}
                                           
                                           {isImage && (
                                             <div className="mt-3 rounded-xl overflow-hidden border border-slate-700/80 max-w-lg shadow-md bg-slate-950">
@@ -2245,11 +2484,49 @@ export const AdminPanel: React.FC = () => {
                                             </div>
                                           )}
 
-                                          <span className={`block text-[10px] mt-2 text-right font-mono ${
-                                            isSupportSender ? 'text-indigo-300' : 'text-slate-400'
-                                          }`}>
-                                            {m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                                          </span>
+                                          <div className="flex items-center justify-end gap-1.5 mt-2">
+                                            <span className={`text-[10px] font-mono ${
+                                              isSupportSender ? 'text-indigo-300' : 'text-slate-400'
+                                            }`}>
+                                              {m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                                            </span>
+                                            {m.isEdited && (
+                                              <span className={`text-[10px] italic font-medium ${isSupportSender ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                                (edited)
+                                              </span>
+                                            )}
+                                            {isSupportSender ? (
+                                              <AnimatePresence mode="wait">
+                                                {(m.isRead || m.status === 'seen' || (m.readBy && (m.readBy.includes('user') || m.readBy.includes('seen') || (activeTicket && m.readBy.includes(activeTicket.userId))))) ? (
+                                                  <motion.span
+                                                    key="seen"
+                                                    initial={{ opacity: 0, scale: 0.8 }}
+                                                    animate={{ opacity: 1, scale: 1 }}
+                                                    exit={{ opacity: 0, scale: 0.8 }}
+                                                    transition={{ duration: 0.2 }}
+                                                    className="flex items-center gap-0.5 text-xs font-extrabold text-sky-300 ml-1.5 bg-indigo-800/80 px-2 py-0.5 rounded border border-sky-300/50 shadow-xs"
+                                                    title="Customer has seen this message"
+                                                  >
+                                                    <CheckCheck className="h-4 w-4 text-sky-300" />
+                                                    <span>Seen</span>
+                                                  </motion.span>
+                                                ) : (
+                                                  <motion.span
+                                                    key="sent"
+                                                    initial={{ opacity: 0, scale: 0.8 }}
+                                                    animate={{ opacity: 1, scale: 1 }}
+                                                    exit={{ opacity: 0, scale: 0.8 }}
+                                                    transition={{ duration: 0.2 }}
+                                                    className="flex items-center gap-0.5 text-xs font-medium text-indigo-200/80 ml-1.5 bg-indigo-900/40 px-2 py-0.5 rounded border border-indigo-400/20"
+                                                    title="Sent"
+                                                  >
+                                                    <Check className="h-4 w-4 text-indigo-300/70" />
+                                                    <span>Sent</span>
+                                                  </motion.span>
+                                                )}
+                                              </AnimatePresence>
+                                             ) : null}
+                                          </div>
                                         </div>
                                       </div>
                                     );

@@ -154,7 +154,11 @@ export interface SupportMessage {
   fileUrl?: string;
   fileName?: string;
   isRead: boolean;
+  status?: 'sent' | 'seen';
+  readBy?: string[];
   isAuto?: boolean;
+  isEdited?: boolean;
+  editedAt?: string;
 }
 
 export interface SupportTicket {

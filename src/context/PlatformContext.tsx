@@ -80,9 +80,12 @@ interface PlatformContextType {
   // Ticket Actions
   createTicket: (title: string, category: SupportTicket['category'], priority: SupportTicket['priority'], initialMessage: string) => Promise<string | undefined>;
   addMessageToTicket: (ticketId: string, text: string, sender: 'user' | 'support', file?: { name: string, url: string }) => Promise<void>;
+  editTicketMessage: (ticketId: string, messageId: string, newText: string) => Promise<void>;
+  deleteTicketMessage: (ticketId: string, messageId: string) => Promise<void>;
   resolveTicket: (ticketId: string) => Promise<void>;
   setTicketTyping: (ticketId: string, side: 'user' | 'support', isTyping: boolean) => void;
   submitTicketRating: (ticketId: string, rating: number, feedback: string) => Promise<void>;
+  markTicketMessagesAsRead: (ticketId: string, readBy: string) => Promise<void>;
   
   // Notification Actions
   markAllNotificationsRead: () => void;
@@ -1266,6 +1269,130 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const markTicketMessagesAsRead = async (ticketId: string, readBy: string) => {
+    if (!ticketId || !readBy) return;
+    try {
+      setTickets(prevTickets => {
+        const ticketObj = prevTickets.find(t => t.id === ticketId);
+        if (!ticketObj) return prevTickets;
+
+        const isUserReader = readBy !== 'support';
+        const targetSender = isUserReader ? 'support' : 'user';
+
+        const hasUnread = (ticketObj.messages || []).some(m => {
+          if (m.sender !== targetSender) return false;
+          const currentReadBy = m.readBy || [m.sender];
+          if (!m.isRead || m.status !== 'seen') return true;
+          return !currentReadBy.includes(readBy) || (isUserReader && !currentReadBy.includes('user')) || (!isUserReader && !currentReadBy.includes('support'));
+        });
+
+        if (!hasUnread) return prevTickets;
+
+        const updatedMessages = (ticketObj.messages || []).map(m => {
+          if (m.sender === targetSender) {
+            const currentReadBy = m.readBy || [m.sender];
+            const addedTokens = [readBy, isUserReader ? 'user' : 'support', 'seen'];
+            if (isUserReader && ticketObj.userId) {
+              addedTokens.push(ticketObj.userId);
+            }
+            const newReadBySet = new Set([...currentReadBy, ...addedTokens]);
+            const newReadBy = Array.from(newReadBySet);
+            return { 
+              ...m, 
+              isRead: true,
+              status: 'seen' as const,
+              readBy: newReadBy
+            };
+          }
+          return m;
+        });
+
+        const updatedTicket: SupportTicket = {
+          ...ticketObj,
+          messages: updatedMessages,
+          updatedAt: formatDate()
+        };
+
+        const ticketRef = doc(db, 'tickets', ticketId);
+        updateDoc(ticketRef, {
+          messages: updatedMessages,
+          updatedAt: formatDate()
+        }).catch(err => console.warn('[Mark Messages Read] Firestore update error:', err));
+
+        return prevTickets.map(t => t.id === ticketId ? updatedTicket : t);
+      });
+    } catch (e) {
+      console.error('[Mark Messages Read] Exception:', e);
+    }
+  };
+
+  const editTicketMessage = async (ticketId: string, messageId: string, newText: string) => {
+    if (!ticketId || !messageId || !newText.trim()) return;
+    try {
+      const trimmed = newText.trim();
+      let updatedMsgs: SupportMessage[] = [];
+      setTickets(prev => prev.map(t => {
+        if (t.id === ticketId) {
+          const msgs = (t.messages || []).map(m => {
+            if (m.id === messageId) {
+              return {
+                ...m,
+                text: trimmed,
+                isEdited: true,
+                editedAt: formatDate()
+              };
+            }
+            return m;
+          });
+          updatedMsgs = msgs;
+          return {
+            ...t,
+            messages: msgs,
+            updatedAt: formatDate()
+          };
+        }
+        return t;
+      }));
+
+      if (updatedMsgs.length > 0) {
+        const ticketRef = doc(db, 'tickets', ticketId);
+        await updateDoc(ticketRef, {
+          messages: updatedMsgs,
+          updatedAt: formatDate()
+        }).catch(err => console.warn('[Edit Ticket Message] Firestore update error:', err));
+      }
+    } catch (e) {
+      console.error('[Edit Ticket Message] Exception:', e);
+    }
+  };
+
+  const deleteTicketMessage = async (ticketId: string, messageId: string) => {
+    if (!ticketId || !messageId) return;
+    try {
+      let updatedMsgs: SupportMessage[] = [];
+      setTickets(prev => prev.map(t => {
+        if (t.id === ticketId) {
+          const msgs = (t.messages || []).filter(m => m.id !== messageId);
+          updatedMsgs = msgs;
+          return {
+            ...t,
+            messages: msgs,
+            updatedAt: formatDate()
+          };
+        }
+        return t;
+      }));
+
+      const ticketRef = doc(db, 'tickets', ticketId);
+      await updateDoc(ticketRef, {
+        messages: updatedMsgs,
+        updatedAt: formatDate()
+      }).catch(err => console.warn('[Delete Ticket Message] Firestore update error:', err));
+    } catch (e) {
+      console.error('[Delete Ticket Message] Exception:', e);
+    }
+  };
+
   const createTicket = async (title: string, category: SupportTicket['category'], priority: SupportTicket['priority'], initialMessage: string): Promise<string | undefined> => {
     if (!currentUser) return;
     try {
@@ -1404,6 +1531,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 text: `Hello ${currentUser.username}! Welcome to MGM Macau Direct Live Support. I am your assigned support representative. How can we help you today?`,
                 timestamp: formatDate(),
                 isRead: false,
+                status: 'sent',
+                readBy: ['support'],
                 isAuto: true
               }
             ]
@@ -1424,7 +1553,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         senderName: sender === 'user' ? tData.username : (tData.agentName || 'Support Officer'),
         text,
         timestamp: formatDate(),
-        isRead: sender === 'user',
+        isRead: false,
+        status: 'sent',
+        readBy: [sender],
         ...(file?.name ? { fileName: file.name } : {}),
         ...(file?.url ? { fileUrl: file.url } : {})
       };
@@ -1448,9 +1579,28 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return [...prev, updatedTicketObj];
       });
 
+      // Sanitize Firestore payload size to guarantee document stays under 600KB
+      let fsMessages = [...updatedMessages];
+      if (JSON.stringify(fsMessages).length > 500000) {
+        const keepCount = 8;
+        const cutoff = Math.max(0, fsMessages.length - keepCount);
+        fsMessages = fsMessages.map((m, idx) => {
+          if (idx < cutoff && m.fileUrl && m.fileUrl.length > 500) {
+            return {
+              ...m,
+              fileUrl: `data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==`
+            };
+          }
+          return m;
+        });
+        if (JSON.stringify(fsMessages).length > 500000) {
+          fsMessages = fsMessages.slice(-50);
+        }
+      }
+
       try {
         await updateDoc(ticketRef, {
-          messages: updatedMessages,
+          messages: fsMessages,
           updatedAt: formatDate(),
           status: sender === 'support' ? 'assigned' : tData.status,
           ...(sender === 'support' ? { adminReplied: true, takenByAdmin: true } : {})
@@ -1460,7 +1610,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       if (sender === 'support' && currentUser && tData.userId === currentUser.id) {
-        addLocalNotification('New Support Reply', `A representative has replied to conversation #${ticketId}.`, 'support');
+        // Chat messages are managed inside Support Chat UI; no top notification needed
       }
 
       // Simulate Auto support officer replies for player texts (only if not taken/replied by admin)
@@ -2271,9 +2421,12 @@ We have assigned you a dedicated chat support agent and he will shortly reply to
       playGame,
       createTicket,
       addMessageToTicket,
+      editTicketMessage,
+      deleteTicketMessage,
       resolveTicket,
       setTicketTyping,
       submitTicketRating,
+      markTicketMessagesAsRead,
       markAllNotificationsRead,
       clearNotifications,
       addLocalNotification,
