@@ -1331,9 +1331,11 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       const trimmed = newText.trim();
       let updatedMsgs: SupportMessage[] = [];
-      setTickets(prev => prev.map(t => {
-        if (t.id === ticketId) {
-          const msgs = (t.messages || []).map(m => {
+
+      setTickets(prev => {
+        const target = prev.find(t => t.id === ticketId);
+        if (target) {
+          updatedMsgs = (target.messages || []).map(m => {
             if (m.id === messageId) {
               return {
                 ...m,
@@ -1344,15 +1346,18 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             }
             return m;
           });
-          updatedMsgs = msgs;
-          return {
-            ...t,
-            messages: msgs,
-            updatedAt: formatDate()
-          };
         }
-        return t;
-      }));
+        return prev.map(t => {
+          if (t.id === ticketId) {
+            return {
+              ...t,
+              messages: updatedMsgs,
+              updatedAt: formatDate()
+            };
+          }
+          return t;
+        });
+      });
 
       if (updatedMsgs.length > 0) {
         const ticketRef = doc(db, 'tickets', ticketId);
@@ -1370,24 +1375,30 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!ticketId || !messageId) return;
     try {
       let updatedMsgs: SupportMessage[] = [];
-      setTickets(prev => prev.map(t => {
-        if (t.id === ticketId) {
-          const msgs = (t.messages || []).filter(m => m.id !== messageId);
-          updatedMsgs = msgs;
-          return {
-            ...t,
-            messages: msgs,
-            updatedAt: formatDate()
-          };
+
+      setTickets(prev => {
+        const target = prev.find(t => t.id === ticketId);
+        if (target) {
+          updatedMsgs = (target.messages || []).filter(m => m.id !== messageId);
         }
-        return t;
-      }));
+        return prev.map(t => {
+          if (t.id === ticketId) {
+            return {
+              ...t,
+              messages: updatedMsgs,
+              updatedAt: formatDate()
+            };
+          }
+          return t;
+        });
+      });
 
       const ticketRef = doc(db, 'tickets', ticketId);
       await updateDoc(ticketRef, {
         messages: updatedMsgs,
         updatedAt: formatDate()
       }).catch(err => console.warn('[Delete Ticket Message] Firestore update error:', err));
+      console.log(`[Delete Message] Deleted message ${messageId} from ticket ${ticketId}`);
     } catch (e) {
       console.error('[Delete Ticket Message] Exception:', e);
     }

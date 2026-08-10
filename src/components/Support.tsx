@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { usePlatform } from '../context/PlatformContext';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../context/firebase';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../context/firebase';
 import { 
   Headphones, 
   Send, 
@@ -21,7 +21,8 @@ import {
   Camera,
   HardDrive,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Trash2
 } from 'lucide-react';
 import { SupportTicket, SupportMessage } from '../types';
 import { compressFileForChat } from '../utils/imageCompressor';
@@ -35,6 +36,7 @@ export const Support: React.FC = () => {
     setTicketTyping,
     submitTicketRating,
     markTicketMessagesAsRead,
+    deleteTicketMessage,
     setTickets
   } = usePlatform();
 
@@ -199,6 +201,115 @@ export const Support: React.FC = () => {
     }
   }, [activeTicket?.id, activeTicket?.messages, currentUser?.id, markTicketMessagesAsRead]);
 
+  // Diagnostic utility function within Support component to fetch and log full document structure of recent messages
+  const diagnoseMessageReadByFlow = async () => {
+    if (!directTicketId || !currentUser) {
+      console.warn('[Support Diagnostic] Missing directTicketId or currentUser session');
+      return;
+    }
+    try {
+      const ticketRef = doc(db, 'tickets', directTicketId);
+      const snapshot = await getDoc(ticketRef);
+      if (!snapshot.exists()) {
+        console.warn(`[Support Diagnostic] Document 'tickets/${directTicketId}' not found.`);
+        return;
+      }
+      const data = snapshot.data() as SupportTicket;
+      const sessionUid = currentUser.id;
+      const recentMsgs = (data.messages || []).slice(-10);
+
+      console.group(`🔍 [Support Diagnostic Utility] Full Document Structure Audit - Ticket ID: ${directTicketId}`);
+      console.log('Session User UID:', sessionUid);
+      console.log('Session User Email/Username:', currentUser.username || currentUser.email);
+      console.log('Total Messages Count:', data.messages?.length || 0);
+      console.log('Raw Document Data:', data);
+
+      recentMsgs.forEach((msg, idx) => {
+        const readByArray = msg.readBy || [];
+        const isUidInReadBy = readByArray.includes(sessionUid);
+        const isUserTokenInReadBy = readByArray.includes('user');
+        const isUIConditionTriggered = isUidInReadBy || isUserTokenInReadBy;
+
+        console.log(`Message #${idx + 1} [ID: ${msg.id}] Sender: ${msg.sender}`, {
+          text: msg.text,
+          timestamp: msg.timestamp,
+          status: msg.status,
+          isRead: msg.isRead,
+          readByArray,
+          sessionUidValidation: {
+            sessionUid,
+            containsSessionUid: isUidInReadBy,
+            containsUserToken: isUserTokenInReadBy,
+            uiConditionTriggered: isUIConditionTriggered
+          }
+        });
+
+        if (msg.sender === 'support') {
+          if (isUIConditionTriggered) {
+            console.log(`✅ [VALIDATED] Support message ${msg.id} readBy array correctly contains recipient UID '${sessionUid}' or 'user'. UI condition message.readBy.includes(recipientId) triggered.`);
+          } else {
+            console.warn(`⚠️ [ISOLATED FAILURE] Support message ${msg.id} readBy array missing session UID '${sessionUid}'. Real-time snapshot pending.`);
+          }
+        }
+      });
+      console.groupEnd();
+    } catch (err) {
+      console.error('[Support Diagnostic] Diagnostic fetch error:', err);
+    }
+  };
+
+  // Comprehensive trace of readBy logic & real-time message document snapshot updates
+  useEffect(() => {
+    if (!currentUser || !directTicketId) return;
+
+    const ticketRef = doc(db, 'tickets', directTicketId);
+    const recipientId = currentUser.id;
+
+    const unsubscribe = onSnapshot(ticketRef, (snapshot) => {
+      if (!snapshot.exists()) return;
+      const data = snapshot.data() as SupportTicket;
+
+      console.log(`[Support readBy Trace] Real-time message document snapshot update for ticket '${directTicketId}':`, {
+        ticketId: data.id,
+        messagesCount: data.messages?.length || 0,
+        updatedAt: data.updatedAt
+      });
+
+      if (data.messages && data.messages.length > 0) {
+        data.messages.forEach((msg: SupportMessage, idx: number) => {
+          const readByArray = msg.readBy || [];
+          const containsRecipientUid = readByArray.includes(recipientId);
+          const containsUserToken = readByArray.includes('user');
+          const isUIConditionMet = readByArray.includes(recipientId) || readByArray.includes('user');
+
+          console.log(`[Support readBy Trace] Message #${idx + 1} (${msg.id}) [sender: ${msg.sender}]:`, {
+            text: msg.text.substring(0, 40),
+            readBy: readByArray,
+            recipientId,
+            containsRecipientUid,
+            containsUserToken,
+            uiConditionTriggered: isUIConditionMet,
+            isRead: msg.isRead,
+            status: msg.status
+          });
+
+          // Validate that the readBy array correctly receives the recipient's UID in real-time
+          if (msg.sender === 'support') {
+            if (isUIConditionMet) {
+              console.log(`[Support readBy Trace] VALIDATED: Message ${msg.id} readBy array contains recipient UID '${recipientId}' (or 'user'). UI condition message.readBy.includes(recipientId) accurately triggered.`);
+            } else {
+              console.log(`[Support readBy Trace] PENDING: Message ${msg.id} has not yet received recipient UID '${recipientId}'.`);
+            }
+          }
+        });
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `tickets/${directTicketId}`);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser?.id, directTicketId]);
+
   if (!currentUser) {
     return (
       <div className="text-center py-16" id="support-not-logged">
@@ -321,6 +432,17 @@ export const Support: React.FC = () => {
 
               {/* Chat Actions */}
               <div className="flex items-center gap-2 shrink-0">
+                {/* Diagnostic Trace Utility Button */}
+                <button
+                  type="button"
+                  onClick={() => diagnoseMessageReadByFlow()}
+                  className="px-2.5 py-2 rounded-xl transition-all text-slate-400 hover:text-emerald-400 bg-slate-900/40 border border-slate-800 text-xs font-mono flex items-center gap-1 cursor-pointer"
+                  title="Run readBy & message snapshot diagnostics"
+                >
+                  <HelpCircle className="h-3.5 w-3.5 text-emerald-500" />
+                  <span className="hidden md:inline text-[10px] uppercase tracking-wider font-bold">Audit readBy</span>
+                </button>
+
                 {/* Message Search Toggle */}
                 <button
                   onClick={() => setShowSearch(!showSearch)}
@@ -380,7 +502,7 @@ export const Support: React.FC = () => {
                 return (
                   <div 
                     key={m.id}
-                    className={`flex items-start gap-2.5 ${isMe ? 'justify-end' : 'justify-start'} ${isSameSender ? 'mt-1' : 'mt-4'}`}
+                    className={`group flex items-start gap-2.5 ${isMe ? 'justify-end' : 'justify-start'} ${isSameSender ? 'mt-1' : 'mt-4'}`}
                   >
                     {/* Left Avatar for Support/Agent */}
                     {!isMe && (
@@ -429,10 +551,23 @@ export const Support: React.FC = () => {
                         )}
                       </div>
 
-                      {/* Timestamp & Read Receipt footer */}
+                      {/* Timestamp & Message Actions footer */}
                       <div className={`flex items-center gap-1.5 text-[9px] text-slate-400/80 font-mono mt-0.5 px-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                         <span>{m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                        {m.isEdited && <span className="italic text-[9px] text-amber-500/90 font-sans font-medium">(edited)</span>}
+                        {/* Note: edited tag omitted per requirements */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (activeTicket?.id && m.id) {
+                              deleteTicketMessage(activeTicket.id, m.id);
+                            }
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1 hover:bg-red-500/15 rounded-md text-slate-400 hover:text-red-400 text-[10px] ml-1 flex items-center gap-0.5"
+                          title="Delete message"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          <span className="text-[8px] uppercase font-bold">Delete</span>
+                        </button>
                       </div>
                     </div>
 
