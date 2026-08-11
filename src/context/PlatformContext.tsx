@@ -1272,55 +1272,51 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const markTicketMessagesAsRead = async (ticketId: string, readBy: string) => {
     if (!ticketId || !readBy) return;
     try {
-      setTickets(prevTickets => {
-        const ticketObj = prevTickets.find(t => t.id === ticketId);
-        if (!ticketObj) return prevTickets;
+      const ticketObj = tickets.find(t => t.id === ticketId);
+      if (!ticketObj) return;
 
-        const isUserReader = readBy !== 'support';
-        const targetSender = isUserReader ? 'support' : 'user';
+      const isUserReader = readBy !== 'support';
+      const targetSender = isUserReader ? 'support' : 'user';
 
-        const hasUnread = (ticketObj.messages || []).some(m => {
-          if (m.sender !== targetSender) return false;
-          const currentReadBy = m.readBy || [m.sender];
-          if (!m.isRead || m.status !== 'seen') return true;
-          return !currentReadBy.includes(readBy) || (isUserReader && !currentReadBy.includes('user')) || (!isUserReader && !currentReadBy.includes('support'));
-        });
-
-        if (!hasUnread) return prevTickets;
-
-        const updatedMessages = (ticketObj.messages || []).map(m => {
-          if (m.sender === targetSender) {
-            const currentReadBy = m.readBy || [m.sender];
-            const addedTokens = [readBy, isUserReader ? 'user' : 'support', 'seen'];
-            if (isUserReader && ticketObj.userId) {
-              addedTokens.push(ticketObj.userId);
-            }
-            const newReadBySet = new Set([...currentReadBy, ...addedTokens]);
-            const newReadBy = Array.from(newReadBySet);
-            return { 
-              ...m, 
-              isRead: true,
-              status: 'seen' as const,
-              readBy: newReadBy
-            };
-          }
-          return m;
-        });
-
-        const updatedTicket: SupportTicket = {
-          ...ticketObj,
-          messages: updatedMessages,
-          updatedAt: formatDate()
-        };
-
-        const ticketRef = doc(db, 'tickets', ticketId);
-        updateDoc(ticketRef, {
-          messages: updatedMessages,
-          updatedAt: formatDate()
-        }).catch(err => console.warn('[Mark Messages Read] Firestore update error:', err));
-
-        return prevTickets.map(t => t.id === ticketId ? updatedTicket : t);
+      const hasUnread = (ticketObj.messages || []).some(m => {
+        if (m.sender !== targetSender) return false;
+        const currentReadBy = m.readBy || [m.sender];
+        if (!m.isRead || m.status !== 'seen') return true;
+        return !currentReadBy.includes(readBy) || (isUserReader && !currentReadBy.includes('user')) || (!isUserReader && !currentReadBy.includes('support'));
       });
+
+      if (!hasUnread) return;
+
+      const updatedMessages = (ticketObj.messages || []).map(m => {
+        if (m.sender === targetSender) {
+          const currentReadBy = m.readBy || [m.sender];
+          const addedTokens = [readBy, isUserReader ? 'user' : 'support', 'seen'];
+          if (isUserReader && ticketObj.userId) {
+            addedTokens.push(ticketObj.userId);
+          }
+          const newReadBySet = new Set([...currentReadBy, ...addedTokens]);
+          const newReadBy = Array.from(newReadBySet);
+          return { 
+            ...m, 
+            isRead: true,
+            status: 'seen' as const,
+            readBy: newReadBy
+          };
+        }
+        return m;
+      });
+
+      setTickets(prev => prev.map(t => t.id === ticketId ? {
+        ...t,
+        messages: updatedMessages,
+        updatedAt: formatDate()
+      } : t));
+
+      const ticketRef = doc(db, 'tickets', ticketId);
+      await updateDoc(ticketRef, {
+        messages: updatedMessages,
+        updatedAt: formatDate()
+      }).catch(err => console.warn('[Mark Messages Read] Firestore update error:', err));
     } catch (e) {
       console.error('[Mark Messages Read] Exception:', e);
     }
@@ -1330,42 +1326,32 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!ticketId || !messageId || !newText.trim()) return;
     try {
       const trimmed = newText.trim();
-      let updatedMsgs: SupportMessage[] = [];
+      const target = tickets.find(t => t.id === ticketId);
+      if (!target) return;
 
-      setTickets(prev => {
-        const target = prev.find(t => t.id === ticketId);
-        if (target) {
-          updatedMsgs = (target.messages || []).map(m => {
-            if (m.id === messageId) {
-              return {
-                ...m,
-                text: trimmed,
-                isEdited: true,
-                editedAt: formatDate()
-              };
-            }
-            return m;
-          });
+      const updatedMsgs = (target.messages || []).map(m => {
+        if (m.id === messageId) {
+          return {
+            ...m,
+            text: trimmed,
+            isEdited: true,
+            editedAt: formatDate()
+          };
         }
-        return prev.map(t => {
-          if (t.id === ticketId) {
-            return {
-              ...t,
-              messages: updatedMsgs,
-              updatedAt: formatDate()
-            };
-          }
-          return t;
-        });
+        return m;
       });
 
-      if (updatedMsgs.length > 0) {
-        const ticketRef = doc(db, 'tickets', ticketId);
-        await updateDoc(ticketRef, {
-          messages: updatedMsgs,
-          updatedAt: formatDate()
-        }).catch(err => console.warn('[Edit Ticket Message] Firestore update error:', err));
-      }
+      setTickets(prev => prev.map(t => t.id === ticketId ? {
+        ...t,
+        messages: updatedMsgs,
+        updatedAt: formatDate()
+      } : t));
+
+      const ticketRef = doc(db, 'tickets', ticketId);
+      await updateDoc(ticketRef, {
+        messages: updatedMsgs,
+        updatedAt: formatDate()
+      }).catch(err => console.warn('[Edit Ticket Message] Firestore update error:', err));
     } catch (e) {
       console.error('[Edit Ticket Message] Exception:', e);
     }
@@ -1373,25 +1359,22 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const deleteTicketMessage = async (ticketId: string, messageId: string) => {
     if (!ticketId || !messageId) return;
+    const isAdminUser = currentRole === 'admin' || currentRole === 'super_admin' || currentRole === 'support' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'support';
+    if (!isAdminUser) {
+      console.warn('[Delete Ticket Message] Unauthorized: Only admins can delete ticket messages.');
+      return;
+    }
     try {
-      let updatedMsgs: SupportMessage[] = [];
+      const target = tickets.find(t => t.id === ticketId);
+      if (!target) return;
 
-      setTickets(prev => {
-        const target = prev.find(t => t.id === ticketId);
-        if (target) {
-          updatedMsgs = (target.messages || []).filter(m => m.id !== messageId);
-        }
-        return prev.map(t => {
-          if (t.id === ticketId) {
-            return {
-              ...t,
-              messages: updatedMsgs,
-              updatedAt: formatDate()
-            };
-          }
-          return t;
-        });
-      });
+      const updatedMsgs = (target.messages || []).filter(m => m.id !== messageId);
+
+      setTickets(prev => prev.map(t => t.id === ticketId ? {
+        ...t,
+        messages: updatedMsgs,
+        updatedAt: formatDate()
+      } : t));
 
       const ticketRef = doc(db, 'tickets', ticketId);
       await updateDoc(ticketRef, {
@@ -1429,7 +1412,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             senderName: currentUser.username,
             text: initialMessage,
             timestamp: formatDate(),
-            isRead: true
+            isRead: false,
+            status: 'sent',
+            readBy: ['user']
           }
         ]
       };

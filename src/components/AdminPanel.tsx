@@ -2160,9 +2160,7 @@ export const AdminPanel: React.FC = () => {
                                               <button
                                                 type="button"
                                                 onClick={() => {
-                                                  if (window.confirm('Delete this message permanently from transcript?')) {
-                                                    deleteTicketMessage(activeTicket.id, m.id);
-                                                  }
+                                                  deleteTicketMessage(activeTicket.id, m.id);
                                                 }}
                                                 className="p-1 rounded hover:bg-rose-500/20 text-rose-300 hover:text-rose-100 transition-colors cursor-pointer"
                                                 title="Delete Message"
@@ -2414,9 +2412,7 @@ export const AdminPanel: React.FC = () => {
                                                   <button
                                                     type="button"
                                                     onClick={() => {
-                                                      if (window.confirm('Delete this message permanently from transcript?')) {
-                                                        deleteTicketMessage(activeTicket.id, m.id);
-                                                      }
+                                                      deleteTicketMessage(activeTicket.id, m.id);
                                                     }}
                                                     className="p-1 rounded hover:bg-rose-500/20 text-rose-300 hover:text-rose-100 transition-colors cursor-pointer"
                                                     title="Delete Message"

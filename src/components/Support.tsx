@@ -21,8 +21,7 @@ import {
   Camera,
   HardDrive,
   Maximize2,
-  Minimize2,
-  Trash2
+  Minimize2
 } from 'lucide-react';
 import { SupportTicket, SupportMessage } from '../types';
 import { compressFileForChat } from '../utils/imageCompressor';
@@ -36,7 +35,6 @@ export const Support: React.FC = () => {
     setTicketTyping,
     submitTicketRating,
     markTicketMessagesAsRead,
-    deleteTicketMessage,
     setTickets
   } = usePlatform();
 
@@ -554,20 +552,6 @@ export const Support: React.FC = () => {
                       {/* Timestamp & Message Actions footer */}
                       <div className={`flex items-center gap-1.5 text-[9px] text-slate-400/80 font-mono mt-0.5 px-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                         <span>{m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                        {/* Note: edited tag omitted per requirements */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (activeTicket?.id && m.id) {
-                              deleteTicketMessage(activeTicket.id, m.id);
-                            }
-                          }}
-                          className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1 hover:bg-red-500/15 rounded-md text-slate-400 hover:text-red-400 text-[10px] ml-1 flex items-center gap-0.5"
-                          title="Delete message"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                          <span className="text-[8px] uppercase font-bold">Delete</span>
-                        </button>
                       </div>
                     </div>
 
