@@ -9,8 +9,6 @@ import {
   Paperclip, 
   Image as ImageIcon, 
   Search, 
-  Check,
-  CheckCheck, 
   Inbox, 
   X,
   FileCheck,

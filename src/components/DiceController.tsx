@@ -10,8 +10,10 @@ import {
   RefreshCw, 
   Check, 
   Coins, 
-  Plus
+  Plus,
+  Repeat
 } from 'lucide-react';
+import { TimeManager, getISTParts, calculateISTPeriodFromInput } from '../utils/TimeManager';
 
 interface DiceControllerProps {
   user: UserProfile;
@@ -19,24 +21,26 @@ interface DiceControllerProps {
 }
 
 export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdateUserProfile }) => {
-  // Date and Time selectors
+  // Date and Time selectors in IST
   const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+    return getISTParts().dateStr;
   });
   const [selectedHour, setSelectedHour] = useState<string>(() => {
-    return String(new Date().getHours()).padStart(2, '0');
+    return String(getISTParts().hours).padStart(2, '0');
   });
   const [selectedMinute, setSelectedMinute] = useState<string>(() => {
-    const min = new Date().getMinutes();
+    const min = getISTParts().minutes;
     const rounded = Math.floor(min / 5) * 5;
     return String(rounded).padStart(2, '0');
   });
 
-  // Override attributes
-  const [outcome, setOutcome] = useState<'win' | 'lose' | 'random'>('lose');
+  // Occurrence selection: Repeating Daily vs One-time
+  const [isRepeating, setIsRepeating] = useState<boolean>(true);
+
+  // Override attributes: win, lose, random
+  const [outcome, setOutcome] = useState<'win' | 'lose' | 'random'>('random');
   const [targetCombo, setTargetCombo] = useState<string>('any');
-  const [winPct, setWinPct] = useState<number>(96); // under 100
+  const [winPct, setWinPct] = useState<number>(75); // 0% - 100% win rate or payout
   const [lossPct, setLossPct] = useState<number>(100); 
 
   // Interactive Live Calculator Inputs
@@ -45,36 +49,19 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Sync to current time frame immediately
+  // Sync to current IST time frame immediately
   const setToCurrentTimeFrame = () => {
-    const now = new Date();
-    setSelectedDate(now.toISOString().split('T')[0]);
-    setSelectedHour(String(now.getHours()).padStart(2, '0'));
-    const currentMin = now.getMinutes();
+    const ist = getISTParts();
+    setSelectedDate(ist.dateStr);
+    setSelectedHour(String(ist.hours).padStart(2, '0'));
+    const currentMin = ist.minutes;
     const roundedMin = Math.floor(currentMin / 5) * 5;
     setSelectedMinute(String(roundedMin).padStart(2, '0'));
   };
 
-  // Calculate the 5-minute Frame/Period ID based on selection
+  // Calculate the 5-minute Frame/Period ID based on selection in IST
   const getCalculatedPeriodId = (): { periodId: string; timeStr: string } => {
-    if (!selectedDate) {
-      return { periodId: '', timeStr: '' };
-    }
-    const parts = selectedDate.split('-');
-    if (parts.length !== 3) return { periodId: '', timeStr: '' };
-    
-    const [year, month, day] = parts;
-    const yyyymmdd = `${year}${month}${day}`;
-    const hrVal = parseInt(selectedHour) || 0;
-    const minVal = parseInt(selectedMinute) || 0;
-    const periodIndex = Math.floor((hrVal * 60 + minVal) / 5) + 1;
-    const periodId = `${yyyymmdd}-${String(periodIndex).padStart(3, '0')}`;
-    
-    const endMin = (minVal + 5) % 60;
-    const endHr = minVal + 5 >= 60 ? (hrVal + 1) % 24 : hrVal;
-    const timeStr = `${String(hrVal).padStart(2, '0')}:${String(minVal).padStart(2, '0')} - ${String(endHr).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
-    
-    return { periodId, timeStr };
+    return calculateISTPeriodFromInput(selectedDate, selectedHour, selectedMinute, isRepeating);
   };
 
   const { periodId, timeStr } = getCalculatedPeriodId();
@@ -89,13 +76,13 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
     setStatusMsg(null);
     try {
       const currentOverrides = user.diceOverrides || {};
-      const slotData: any = { outcome };
-      if (outcome === 'win') {
-        if (targetCombo !== undefined) slotData.target = targetCombo;
-        if (winPct !== undefined) slotData.winPct = winPct;
-      } else if (outcome === 'lose') {
-        if (lossPct !== undefined) slotData.lossPct = lossPct;
-      }
+      const slotData: any = { 
+        outcome,
+        isRepeating,
+        target: targetCombo || 'any',
+        winPct: outcome === 'lose' ? 0 : winPct,
+        lossPct: outcome === 'win' ? 0 : (outcome === 'lose' ? lossPct : 100)
+      };
 
       const updatedOverrides = {
         ...currentOverrides,
@@ -106,7 +93,7 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
       
       setStatusMsg({
         type: 'success',
-        text: 'Saved!',
+        text: 'Saved User Override!',
       });
       
       setTimeout(() => setStatusMsg(null), 2500);
@@ -173,6 +160,17 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
 
   // Helper to format slot period to human-readable format
   const formatPeriodId = (id: string): string => {
+    if (id.startsWith('daily-')) {
+      const idxStr = id.split('-')[1];
+      const pIdx = parseInt(idxStr);
+      const totalMinutes = (pIdx - 1) * 5;
+      const hr = Math.floor(totalMinutes / 60);
+      const mn = totalMinutes % 60;
+      const endMn = (mn + 5) % 60;
+      const endHr = mn + 5 >= 60 ? (hr + 1) % 24 : hr;
+      return `Daily (${String(hr).padStart(2, '0')}:${String(mn).padStart(2, '0')}-${String(endHr).padStart(2, '0')}:${String(endMn).padStart(2, '0')})`;
+    }
+
     if (id.length < 12) return id;
     const y = id.substring(0, 4);
     const m = id.substring(4, 6);
@@ -190,8 +188,9 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
   };
 
   // Calculate live return preview values
-  const winPayout = testBetAmount + (testBetAmount * winPct / 100);
-  const lossPayout = testBetAmount * ((100 - lossPct) / 100);
+  const effectiveWinRate = outcome === 'lose' ? 0 : winPct;
+  const winPayout = testBetAmount + (testBetAmount * (effectiveWinRate / 100));
+  const lossPayout = lossPct >= 100 ? 0 : (testBetAmount * ((100 - lossPct) / 100));
 
   const presetsWinningCombos = [
     { value: 'any', label: '✨ Any Choice' },
@@ -213,13 +212,13 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
           <span className="text-lg">🎲</span>
           <div>
             <h4 className="text-sm font-extrabold text-white flex items-center gap-1.5 leading-none">
-              Dice Controller 
+              User Dice Controller 
               <span className="text-[9px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider font-mono">
                 @{user.username}
               </span>
             </h4>
             <p className="text-[10px] text-slate-400 mt-0.5 font-mono">
-              Target ID Frame Rigging Settings
+              Target ID Frame Rigging & Random Win Controller
             </p>
           </div>
         </div>
@@ -251,9 +250,37 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
           
           {/* Time Frame Selection */}
           <div className="bg-slate-950/30 p-3 rounded-lg border border-slate-800/60 space-y-2">
-            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider font-mono flex items-center gap-1">
-              <Calendar className="h-3.5 w-3.5 text-indigo-400" /> 1. Select Time Period
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider font-mono flex items-center gap-1">
+                <Calendar className="h-3.5 w-3.5 text-indigo-400" /> 1. Select Time Period
+              </span>
+
+              {/* Repeating / One-time switcher */}
+              <div className="flex bg-slate-900 border border-slate-800 p-0.5 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setIsRepeating(true)}
+                  className={`px-2 py-0.5 text-[9px] font-bold rounded flex items-center gap-1 transition-all cursor-pointer ${
+                    isRepeating 
+                      ? 'bg-indigo-600 text-white shadow-sm' 
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Repeat className="h-2.5 w-2.5" /> Daily
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsRepeating(false)}
+                  className={`px-2 py-0.5 text-[9px] font-bold rounded flex items-center gap-1 transition-all cursor-pointer ${
+                    !isRepeating 
+                      ? 'bg-indigo-600 text-white shadow-sm' 
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Calendar className="h-2.5 w-2.5" /> One-time
+                </button>
+              </div>
+            </div>
             
             <div className="grid grid-cols-3 gap-2">
               <div>
@@ -261,8 +288,9 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
                 <input
                   type="date"
                   value={selectedDate}
+                  disabled={isRepeating}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full px-2 py-1 bg-slate-900 border border-slate-800 rounded text-[11px] font-mono text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                  className="w-full px-2 py-1 bg-slate-900 border border-slate-800 rounded text-[11px] font-mono text-white focus:outline-none focus:border-indigo-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -311,10 +339,10 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
           {/* Outcome Decision Row */}
           <div className="bg-slate-950/30 p-3 rounded-lg border border-slate-800/60 space-y-2">
             <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider font-mono flex items-center gap-1">
-              <ShieldAlert className="h-3.5 w-3.5 text-indigo-400" /> 2. Manual Outcome
+              <ShieldAlert className="h-3.5 w-3.5 text-indigo-400" /> 2. Manual Outcome / Win Mode
             </span>
 
-            {/* Tight, compact Outcome tabs */}
+            {/* Outcome tabs */}
             <div className="grid grid-cols-3 gap-1.5">
               <button
                 type="button"
@@ -326,7 +354,7 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
                 }`}
               >
                 <span className="text-sm">❌</span>
-                <span className="text-[9px] uppercase tracking-wider mt-0.5">Forced Loss</span>
+                <span className="text-[9px] uppercase tracking-wider mt-0.5 font-bold">Forced Loss</span>
               </button>
 
               <button
@@ -339,7 +367,7 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
                 }`}
               >
                 <span className="text-sm">👑</span>
-                <span className="text-[9px] uppercase tracking-wider mt-0.5">Forced Win</span>
+                <span className="text-[9px] uppercase tracking-wider mt-0.5 font-bold">Forced Win</span>
               </button>
 
               <button
@@ -352,7 +380,7 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
                 }`}
               >
                 <span className="text-sm">🎲</span>
-                <span className="text-[9px] uppercase tracking-wider mt-0.5">Randomized</span>
+                <span className="text-[9px] uppercase tracking-wider mt-0.5 font-bold">Random Win %</span>
               </button>
             </div>
 
@@ -381,7 +409,7 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
                   ))}
                 </div>
 
-                {/* Specific numbers 3-18 select chips (ultra-dense micro display) */}
+                {/* Specific numbers 3-18 select chips */}
                 <div className="flex flex-wrap gap-1 p-1 bg-slate-900/60 rounded border border-slate-800/80">
                   {Array.from({ length: 16 }).map((_, i) => {
                     const sumNum = String(i + 3);
@@ -406,72 +434,94 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
             )}
           </div>
 
-          {/* Return matrix & calculator condensed */}
-          {outcome !== 'random' && (
-            <div className="bg-slate-950/30 p-3 rounded-lg border border-slate-800/60 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider font-mono flex items-center gap-1">
-                  <Coins className="h-3.5 w-3.5 text-indigo-400" /> 3. Payout Adjustment & Simulation
-                </span>
-                
-                <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded text-[10px]">
-                  <span className="text-[9px] text-slate-400 font-mono font-bold">Wager: $</span>
-                  <input
-                    type="number"
-                    value={testBetAmount}
-                    onChange={(e) => setTestBetAmount(Math.max(1, parseInt(e.target.value) || 0))}
-                    className="w-10 bg-transparent text-white font-mono font-black text-center focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Slider Row */}
-              <div className="flex items-center gap-3">
-                <div className="flex-1">
-                  <input
-                    type="range"
-                    min="1"
-                    max="100"
-                    value={outcome === 'win' ? winPct : lossPct}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value) || 1;
-                      if (outcome === 'win') setWinPct(val);
-                      else setLossPct(val);
-                    }}
-                    className="w-full accent-indigo-500 h-1 cursor-pointer"
-                  />
-                </div>
-                <div className="flex items-center gap-1 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-850 text-[10px] font-mono">
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={outcome === 'win' ? winPct : lossPct}
-                    onChange={(e) => {
-                      const val = Math.min(100, Math.max(1, parseInt(e.target.value) || 1));
-                      if (outcome === 'win') setWinPct(val);
-                      else setLossPct(val);
-                    }}
-                    className="w-8 text-center text-white bg-transparent font-black focus:outline-none"
-                  />
-                  <span className="text-slate-400 font-black">%</span>
-                </div>
-              </div>
-
-              {/* Tiny payout return status boxes */}
-              <div className="grid grid-cols-2 gap-2 text-[10px] pt-1">
-                <div className={`p-1.5 rounded border ${outcome === 'win' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-slate-900/40 border-slate-850'}`}>
-                  <span className="text-slate-400 block text-[9px] font-bold">ON WIN RETURN</span>
-                  <strong className="text-emerald-400 font-mono text-xs block">${winPayout.toFixed(2)}</strong>
-                </div>
-
-                <div className={`p-1.5 rounded border ${outcome === 'lose' ? 'bg-rose-500/10 border-rose-500/20' : 'bg-slate-900/40 border-slate-850'}`}>
-                  <span className="text-slate-400 block text-[9px] font-bold">ON LOSS RETURN</span>
-                  <strong className="text-rose-400 font-mono text-xs block">${lossPayout.toFixed(2)}</strong>
-                </div>
+          {/* Winning Percentage & Payout Adjustment Section (Enabled for all modes) */}
+          <div className="bg-slate-950/30 p-3 rounded-lg border border-slate-800/60 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider font-mono flex items-center gap-1">
+                <Coins className="h-3.5 w-3.5 text-indigo-400" /> 3. Winning Percentage & Win Rate
+              </span>
+              
+              <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded text-[10px]">
+                <span className="text-[9px] text-slate-400 font-mono font-bold">Wager: $</span>
+                <input
+                  type="number"
+                  value={testBetAmount}
+                  onChange={(e) => setTestBetAmount(Math.max(1, parseInt(e.target.value) || 0))}
+                  className="w-10 bg-transparent text-white font-mono font-black text-center focus:outline-none"
+                />
               </div>
             </div>
-          )}
+
+            <div className="flex items-center justify-between">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                {outcome === 'random' ? 'Win Probability (Win Rate %)' : outcome === 'win' ? 'Forced Win Rate / Return %' : 'Loss Rate %'}
+              </label>
+              <span className="text-[10px] font-mono font-extrabold text-indigo-300 bg-indigo-950 px-2 py-0.5 rounded border border-indigo-500/20">
+                {effectiveWinRate}% Win Rate
+              </span>
+            </div>
+
+            {/* Slider Row */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={outcome === 'lose' ? (100 - lossPct) : winPct}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    if (outcome === 'lose') {
+                      setLossPct(100 - val);
+                    } else {
+                      setWinPct(val);
+                    }
+                  }}
+                  className="w-full accent-indigo-500 h-1 cursor-pointer"
+                />
+              </div>
+              <div className="flex items-center gap-1 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-850 text-[10px] font-mono">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={outcome === 'lose' ? (100 - lossPct) : winPct}
+                  onChange={(e) => {
+                    const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                    if (outcome === 'lose') {
+                      setLossPct(100 - val);
+                    } else {
+                      setWinPct(val);
+                    }
+                  }}
+                  className="w-8 text-center text-white bg-transparent font-black focus:outline-none"
+                />
+                <span className="text-slate-400 font-black">%</span>
+              </div>
+            </div>
+
+            {/* Payout return status boxes */}
+            <div className="grid grid-cols-2 gap-2 text-[10px] pt-1">
+              <div className="p-1.5 rounded border bg-emerald-500/10 border-emerald-500/20">
+                <span className="text-slate-400 block text-[9px] font-bold">ESTIMATED WIN RETURN</span>
+                <strong className="text-emerald-400 font-mono text-xs block">${winPayout.toFixed(2)} (+${(winPayout - testBetAmount).toFixed(2)})</strong>
+              </div>
+
+              <div className="p-1.5 rounded border bg-rose-500/10 border-rose-500/20">
+                <span className="text-slate-400 block text-[9px] font-bold">ESTIMATED LOSS RETURN</span>
+                <strong className="text-rose-400 font-mono text-xs block">${lossPayout.toFixed(2)} (-${(testBetAmount - lossPayout).toFixed(2)})</strong>
+              </div>
+            </div>
+
+            <p className="text-[9px] text-slate-400 leading-normal font-mono">
+              {outcome === 'random' 
+                ? `🎲 During this slot, @${user.username} has a ${winPct}% randomized chance to win on their chosen bet with a +${winPct}% payout return.`
+                : outcome === 'win'
+                ? `👑 During this slot, @${user.username} is 100% GUARANTEED TO WIN on any choice bet placed with a +${winPct}% profit payout.`
+                : `❌ During this slot, @${user.username} is 100% GUARANTEED TO LOSE (${lossPct}% loss).`
+              }
+            </p>
+          </div>
 
           {/* Action Row */}
           <div className="flex items-center gap-2 pt-1">
@@ -514,7 +564,7 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
                 <AlertCircle className="h-6 w-6 text-slate-600 mb-1.5" />
                 <span className="text-[10px] text-slate-350 font-bold uppercase tracking-wider font-mono">No Active Overrides</span>
                 <span className="text-[9px] text-slate-500 mt-1 max-w-[150px] leading-relaxed">
-                  Defaults to random odds.
+                  Defaults to normal random odds.
                 </span>
               </div>
             ) : (
@@ -522,13 +572,18 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
                 .sort(([slotA], [slotB]) => slotA.localeCompare(slotB))
                 .map(([slotId, override]) => {
                   const isWin = override.outcome === 'win';
+                  const isLoss = override.outcome === 'lose';
+                  const isRandom = override.outcome === 'random';
+                  const isRepeated = slotId.startsWith('daily-');
                   return (
                     <div
                       key={slotId}
                       className={`p-2 rounded-lg border text-left transition-all relative overflow-hidden flex items-center justify-between ${
                         isWin 
                           ? 'bg-emerald-950/20 border-emerald-900/40 hover:border-emerald-500/30' 
-                          : 'bg-rose-950/20 border-rose-900/40 hover:border-rose-500/30'
+                          : isLoss
+                          ? 'bg-rose-950/20 border-rose-900/40 hover:border-rose-500/30'
+                          : 'bg-blue-950/20 border-blue-900/40 hover:border-blue-500/30'
                       }`}
                     >
                       <div className="space-y-1">
@@ -537,10 +592,19 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
                             ID: {slotId}
                           </span>
                           <span className={`text-[8px] font-bold uppercase px-1 rounded ${
-                            isWin ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                            isWin 
+                              ? 'bg-emerald-500/10 text-emerald-400' 
+                              : isLoss 
+                              ? 'bg-rose-500/10 text-rose-400' 
+                              : 'bg-blue-500/10 text-blue-400'
                           }`}>
-                            {isWin ? '👑 Win' : '❌ Loss'}
+                            {isWin ? '👑 Win' : isLoss ? '❌ Loss' : `🎲 Random (${override.winPct ?? 50}%)`}
                           </span>
+                          {isRepeated && (
+                            <span className="text-[8px] bg-indigo-500/15 border border-indigo-500/20 text-indigo-300 px-1 rounded font-bold font-mono">
+                              Daily
+                            </span>
+                          )}
                         </div>
                         
                         <div className="text-[9px] text-slate-300 font-mono">
@@ -549,9 +613,11 @@ export const DiceController: React.FC<DiceControllerProps> = ({ user, adminUpdat
 
                         <div className="text-[8px] text-slate-400 font-mono">
                           {isWin ? (
-                            <span>Combos: <strong className="text-emerald-400 uppercase">{override.target || 'any'}</strong> ({override.winPct ?? 96}% Pct)</span>
-                          ) : (
+                            <span>Combos: <strong className="text-emerald-400 uppercase">{override.target || 'any'}</strong> ({override.winPct ?? 100}% Win Rate)</span>
+                          ) : isLoss ? (
                             <span>Outcome: <strong className="text-rose-400">Loss ({override.lossPct ?? 100}%)</strong></span>
+                          ) : (
+                            <span>Win Rate: <strong className="text-blue-300 font-bold">{override.winPct ?? 50}%</strong></span>
                           )}
                         </div>
                       </div>

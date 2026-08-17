@@ -89,7 +89,7 @@ service cloud.firestore {
              data.betAmount is number && data.betAmount > 0 &&
              data.winAmount is number && data.winAmount >= 0 &&
              data.multiplier is number && data.multiplier >= 0 &&
-             data.status is string && (data.status == 'win' || data.status == 'loss') &&
+             data.status is string && (data.status == 'win' || data.status == 'loss' || data.status == 'pending') &&
              data.date is string;
     }
 
@@ -209,7 +209,11 @@ service cloud.firestore {
                     isValidId(betId) && 
                     isValidBet(incoming()) && 
                     incoming().userId == request.auth.uid;
-      allow update, delete: if false; // Wager audits are immutable
+      allow update: if isSignedIn() && 
+                    isValidId(betId) && 
+                    isValidBet(incoming()) && 
+                    (incoming().userId == request.auth.uid || isSupport());
+      allow delete: if false; // Wager audits are immutable
     }
 
     // COLLECTION: BANK ACCOUNTS

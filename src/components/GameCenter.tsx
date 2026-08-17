@@ -6,6 +6,15 @@ import { PremiumDisplayBackground } from './PremiumDisplayBackground';
 import { GameLoader } from './GameLoader';
 import { LiveWinsStream } from './LiveWinsStream';
 import { 
+  TimeManager,
+  getISTParts, 
+  getISTPeriod, 
+  getISTRemainingSeconds, 
+  getISTTimeSlot, 
+  getISTPeriodWithOffset, 
+  getISTPeriodIndex 
+} from '../utils/TimeManager';
+import { 
   Trophy, 
   Coins, 
   Gamepad2, 
@@ -48,10 +57,21 @@ function getDeterministicRollForPeriod(period: string, globalDiceOverrides: Reco
   const activeGlobalOverride = globalDiceOverrides[period] || globalDiceOverrides[`daily-${pIdxStr}`];
 
   let d1 = 1, d2 = 1, d3 = 1, sum = 3;
-  if (activeGlobalOverride && activeGlobalOverride.outcome !== 'random') {
+  if (activeGlobalOverride) {
     const outcomeVal = activeGlobalOverride.outcome;
     const targetVal = activeGlobalOverride.target || 'any';
-    
+    const winPct = activeGlobalOverride.winPct !== undefined ? activeGlobalOverride.winPct : 50;
+
+    let targetWin = true;
+    if (outcomeVal === 'win') {
+      targetWin = true;
+    } else if (outcomeVal === 'lose') {
+      targetWin = false;
+    } else if (outcomeVal === 'random') {
+      const probSeed = seededRandom(period + '-prob');
+      targetWin = (probSeed * 100) < winPct;
+    }
+
     let found = false;
     let tries = 0;
     while (!found && tries < 1000) {
@@ -68,7 +88,7 @@ function getDeterministicRollForPeriod(period: string, globalDiceOverrides: Reco
       const isOdd = sum % 2 === 1;
       const isEven = sum % 2 === 0;
 
-      if (outcomeVal === 'win') {
+      if (targetWin) {
         if (targetVal === 'any') {
           found = true;
         } else {
@@ -80,19 +100,39 @@ function getDeterministicRollForPeriod(period: string, globalDiceOverrides: Reco
           else match = sum === parseInt(targetVal);
           if (match) found = true;
         }
-      } else if (outcomeVal === 'lose') {
-        let match = false;
-        if (targetVal === 'big') match = isBig;
-        else if (targetVal === 'small') match = isSmall;
-        else if (targetVal === 'odd') match = isOdd;
-        else if (targetVal === 'even') match = isEven;
-        else match = sum === parseInt(targetVal);
-        if (!match) found = true;
+      } else {
+        if (targetVal === 'any') {
+          found = true;
+        } else {
+          let match = false;
+          if (targetVal === 'big') match = isBig;
+          else if (targetVal === 'small') match = isSmall;
+          else if (targetVal === 'odd') match = isOdd;
+          else if (targetVal === 'even') match = isEven;
+          else match = sum === parseInt(targetVal);
+          if (!match) found = true;
+        }
       }
       tries++;
     }
     if (!found) {
-      d1 = 3; d2 = 4; d3 = 5; sum = 12;
+      if (targetVal === 'big') {
+        d1 = 4; d2 = 5; d3 = 5; sum = 14;
+      } else if (targetVal === 'small') {
+        d1 = 2; d2 = 2; d3 = 3; sum = 7;
+      } else if (targetVal === 'odd') {
+        d1 = 3; d2 = 3; d3 = 3; sum = 9;
+      } else if (targetVal === 'even') {
+        d1 = 2; d2 = 4; d3 = 4; sum = 10;
+      } else if (targetVal !== 'any' && !isNaN(parseInt(targetVal))) {
+        const val = parseInt(targetVal);
+        d1 = Math.max(1, Math.min(6, Math.floor(val / 3)));
+        d2 = Math.max(1, Math.min(6, Math.floor((val - d1) / 2)));
+        d3 = Math.max(1, Math.min(6, val - d1 - d2));
+        sum = d1 + d2 + d3;
+      } else {
+        d1 = 3; d2 = 4; d3 = 5; sum = 12;
+      }
     }
   } else {
     d1 = Math.floor(seededRandom(period + '-d1') * 6) + 1;
@@ -116,6 +156,8 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
     games, 
     bets, 
     playGame: contextPlayGame,
+    placeActiveDiceBet,
+    settleActiveDiceBet,
     adminUpdateUserProfile,
     adminUpdateDiceManualFields
   } = usePlatform();
@@ -267,26 +309,19 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
     return local ? JSON.parse(local) : [];
   });
   const [diceIsCommitted, setDiceIsCommitted] = useState<boolean>(false);
+  const activeBetIdRef = useRef<string | null>(null);
 
-  // Time-based schedule helpers
+  // Time-based schedule helpers with strict Indian Standard Time (IST) adherence
   const getCurrentTimeSlot = (): string => {
-    const now = new Date();
-    const hrs = now.getHours();
-    const mins = now.getMinutes();
-    const slotMin = Math.floor(mins / 5) * 5;
-    return `${String(hrs).padStart(2, '0')}:${String(slotMin).padStart(2, '0')}`;
+    return getISTTimeSlot();
   };
 
   const getRealRemainingSeconds = (): number => {
-    const now = new Date();
-    return 300 - ((now.getMinutes() % 5) * 60 + now.getSeconds());
+    return getISTRemainingSeconds();
   };
 
   const getRealPeriod = (): string => {
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    const periodIndex = Math.floor(currentMinutes / 5) + 1;
-    return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(periodIndex).padStart(3, '0')}`;
+    return getISTPeriod();
   };
 
   const getDisplayPeriod = (): string => {
@@ -306,13 +341,57 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
     if (diceTimeMode === 'fast') {
       return String(dicePeriod + offset);
     }
-    const now = new Date();
-    const offsetMs = offset * 5 * 60 * 1000;
-    const offsetDate = new Date(now.getTime() + offsetMs);
-    const currentMinutes = offsetDate.getHours() * 60 + offsetDate.getMinutes();
-    const periodIndex = Math.floor(currentMinutes / 5) + 1;
-    return `${offsetDate.getFullYear()}${String(offsetDate.getMonth() + 1).padStart(2, '0')}${String(offsetDate.getDate()).padStart(2, '0')}-${String(periodIndex).padStart(3, '0')}`;
+    return getISTPeriodWithOffset(offset);
   };
+
+  // Persistent Bet Recovery on mount or user change: guarantees bets never disappear on refresh/back navigation
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // Check if there is an active pending bet in Firestore bets collection
+    const userPendingBet = bets.find(b => b.userId === currentUser.id && b.status === 'pending' && b.gameId === 'dice');
+    if (userPendingBet) {
+      console.log('[BET RECOVERY - FIRESTORE] Restoring pending active bet:', userPendingBet);
+      setDiceIsCommitted(true);
+      activeBetIdRef.current = userPendingBet.id;
+      if (userPendingBet.choices && userPendingBet.choices.length > 0) {
+        setDiceSelectedChoices(userPendingBet.choices);
+        committedChoicesRef.current = userPendingBet.choices;
+      }
+      if (userPendingBet.perBetAmount) {
+        setPerBetAmount(userPendingBet.perBetAmount);
+      }
+      if (userPendingBet.period) {
+        committedBetPeriodRef.current = userPendingBet.period;
+      }
+      return;
+    }
+
+    // Fallback: check localStorage for cached active bet in case Firestore snapshot is still warming up
+    try {
+      const cached = localStorage.getItem(`active_dice_bet_${currentUser.id}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Date.now() - (parsed.placedAt || 0) < 15 * 60 * 1000) {
+          console.log('[BET RECOVERY - LOCAL CACHE] Restoring active bet from cache:', parsed);
+          setDiceIsCommitted(true);
+          activeBetIdRef.current = parsed.id;
+          if (parsed.choices && parsed.choices.length > 0) {
+            setDiceSelectedChoices(parsed.choices);
+            committedChoicesRef.current = parsed.choices;
+          }
+          if (parsed.perBetAmount) {
+            setPerBetAmount(parsed.perBetAmount);
+          }
+          if (parsed.period) {
+            committedBetPeriodRef.current = parsed.period;
+          }
+        } else {
+          localStorage.removeItem(`active_dice_bet_${currentUser.id}`);
+        }
+      }
+    } catch (e) {}
+  }, [currentUser, bets]);
 
   useEffect(() => {
     const currentDiceGame = games.find(g => g.id === 'dice');
@@ -347,6 +426,8 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
   const currentUserRef = useRef(currentUser);
   const gamesRef = useRef(games);
   const diceRollingRef = useRef(diceRolling);
+  const committedBetPeriodRef = useRef<string>('');
+  const committedChoicesRef = useRef<string[]>([]);
 
   useEffect(() => {
     diceIsCommittedRef.current = diceIsCommitted;
@@ -441,21 +522,166 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
     const latestGames = gamesRef.current;
     if (!latestUser) return;
 
-    const drawingPeriod = diceTimeMode === 'fast' ? String(dicePeriod) : getPeriodWithOffset(-1);
+    const currentPeriod = getRealPeriod();
+    const prevPeriod = getPeriodWithOffset(-1);
+    const nextPeriod = getPeriodWithOffset(1);
+    const drawingPeriod = diceTimeMode === 'fast' ? String(dicePeriod) : currentPeriod;
     const currentDiceGame = latestGames.find(g => g.id === 'dice');
     const globalDiceOverrides = currentDiceGame?.globalDiceOverrides || {};
 
+    const curMinuteIndex = getISTPeriodIndex();
+    const curDailyKey = `daily-${String(curMinuteIndex).padStart(3, '0')}`;
+    const prevMinuteIndex = curMinuteIndex === 1 ? 288 : curMinuteIndex - 1;
+    const prevDailyKey = `daily-${String(prevMinuteIndex).padStart(3, '0')}`;
+    const nextMinuteIndex = curMinuteIndex === 288 ? 1 : curMinuteIndex + 1;
+    const nextDailyKey = `daily-${String(nextMinuteIndex).padStart(3, '0')}`;
+
+    const getPIdxKey = (p: string) => {
+      if (p && p.includes('-')) return `daily-${p.split('-')[1]}`;
+      return '';
+    };
+
+    const committedPeriod = committedBetPeriodRef.current;
+    const candidateKeys = [
+      committedPeriod,
+      getPIdxKey(committedPeriod),
+      drawingPeriod,
+      getPIdxKey(drawingPeriod),
+      currentPeriod,
+      getPIdxKey(currentPeriod),
+      curDailyKey,
+      prevPeriod,
+      getPIdxKey(prevPeriod),
+      prevDailyKey,
+      nextPeriod,
+      getPIdxKey(nextPeriod),
+      nextDailyKey
+    ].filter(Boolean) as string[];
+
+    console.log(`[DICE DRAW IST ENGINE] Drawing Period: ${drawingPeriod} (IST: ${getISTParts().formattedIST}) | Active Candidate Keys:`, candidateKeys);
+
     let d1 = 1, d2 = 1, d3 = 1, sum = 3;
 
-    const slotOverride = latestUser?.diceOverrides?.[drawingPeriod];
+    // Check user-specific slot overrides
+    let slotOverride: any = null;
+    if (latestUser?.diceOverrides) {
+      for (const k of candidateKeys) {
+        if (latestUser.diceOverrides[k]) {
+          slotOverride = latestUser.diceOverrides[k];
+          break;
+        }
+      }
+    }
+
+    // Check global slot overrides
+    let activeGlobalOverride: any = null;
+    if (globalDiceOverrides) {
+      for (const k of candidateKeys) {
+        if (globalDiceOverrides[k]) {
+          activeGlobalOverride = globalDiceOverrides[k];
+          break;
+        }
+      }
+    }
+
+    // Check user instant rigging
+    const rawNextResult = latestUser?.nextDiceResult;
     const userTargetSlot = latestUser?.nextDiceTimeSlot || 'any';
-    const isUserRiggingActive = latestUser?.nextDiceResult && latestUser.nextDiceResult !== 'random' && (userTargetSlot === 'any' || userTargetSlot === drawingPeriod);
+    const isUserInstantMatch = !userTargetSlot || userTargetSlot === 'any' || candidateKeys.includes(userTargetSlot);
+    const hasExplicitUserInstant = isUserInstantMatch && (
+      rawNextResult === 'win' || 
+      rawNextResult === 'lose' || 
+      (rawNextResult && !isNaN(parseInt(rawNextResult))) ||
+      (rawNextResult === 'random' && latestUser?.nextDiceWinPercentage !== undefined && latestUser?.nextDiceWinPercentage !== null)
+    );
 
-    if (slotOverride && slotOverride.outcome !== 'random') {
-      const outcomeVal = slotOverride.outcome;
-      const targetVal = slotOverride.target || 'any';
-      const choices = diceSelectedChoicesRef.current;
+    let targetDecision: 'win' | 'lose' | 'random' = 'random';
+    let targetCombo = 'any';
+    let forcedSum: number | null = null;
+    let winPctToUse = 96;
+    let lossPctToUse = 100;
+    let overrideType: 'user_slot' | 'user_instant' | 'global_slot' | 'none' = 'none';
 
+    if (slotOverride) {
+      overrideType = 'user_slot';
+      if (slotOverride.outcome === 'win') {
+        targetDecision = 'win';
+        targetCombo = slotOverride.target || 'any';
+        winPctToUse = slotOverride.winPct !== undefined ? slotOverride.winPct : 96;
+      } else if (slotOverride.outcome === 'lose') {
+        targetDecision = 'lose';
+        lossPctToUse = slotOverride.lossPct !== undefined ? slotOverride.lossPct : 100;
+      } else if (slotOverride.outcome === 'random') {
+        targetCombo = slotOverride.target || 'any';
+        const winRate = slotOverride.winPct !== undefined ? slotOverride.winPct : 50;
+        const willWin = (Math.random() * 100) < winRate;
+        targetDecision = willWin ? 'win' : 'lose';
+        winPctToUse = slotOverride.winPct !== undefined ? slotOverride.winPct : 96;
+        lossPctToUse = slotOverride.lossPct !== undefined ? slotOverride.lossPct : 100;
+        console.log(`[USER SLOT RANDOM WIN EVALUATION] Target: ${targetCombo} | Win Rate: ${winRate}% | Decision: ${targetDecision.toUpperCase()}`);
+      }
+    } else if (activeGlobalOverride) {
+      overrideType = 'global_slot';
+      if (activeGlobalOverride.outcome === 'win') {
+        targetDecision = 'win';
+        targetCombo = activeGlobalOverride.target || 'any';
+        winPctToUse = activeGlobalOverride.winPct !== undefined ? activeGlobalOverride.winPct : 96;
+      } else if (activeGlobalOverride.outcome === 'lose') {
+        targetDecision = 'lose';
+        lossPctToUse = activeGlobalOverride.lossPct !== undefined ? activeGlobalOverride.lossPct : 100;
+      } else if (activeGlobalOverride.outcome === 'random') {
+        targetCombo = activeGlobalOverride.target || 'any';
+        const winRate = activeGlobalOverride.winPct !== undefined ? activeGlobalOverride.winPct : 50;
+        const willWin = (Math.random() * 100) < winRate;
+        targetDecision = willWin ? 'win' : 'lose';
+        winPctToUse = activeGlobalOverride.winPct !== undefined ? activeGlobalOverride.winPct : 96;
+        lossPctToUse = activeGlobalOverride.lossPct !== undefined ? activeGlobalOverride.lossPct : 100;
+        console.log(`[GLOBAL OVERRIDE RANDOM WIN EVALUATION] Slot: ${candidateKeys[0]} | Target: ${targetCombo} | Win Rate: ${winRate}% | Decision: ${targetDecision.toUpperCase()}`);
+      }
+    } else if (hasExplicitUserInstant && latestUser?.nextDiceResult) {
+      overrideType = 'user_instant';
+      const outcomeVal = latestUser.nextDiceResult;
+      if (outcomeVal === 'win') {
+        targetDecision = 'win';
+        winPctToUse = latestUser.nextDiceWinPercentage ?? 96;
+      } else if (outcomeVal === 'lose') {
+        targetDecision = 'lose';
+        lossPctToUse = latestUser.nextDiceLossPercentage ?? 100;
+      } else if (outcomeVal === 'random') {
+        const winRate = latestUser.nextDiceWinPercentage ?? 50;
+        const willWin = (Math.random() * 100) < winRate;
+        targetDecision = willWin ? 'win' : 'lose';
+        winPctToUse = latestUser.nextDiceWinPercentage ?? 96;
+        lossPctToUse = latestUser.nextDiceLossPercentage ?? 100;
+        console.log(`[USER INSTANT RANDOM WIN EVALUATION] Win Rate: ${winRate}% | Decision: ${targetDecision.toUpperCase()}`);
+      } else if (outcomeVal && !isNaN(parseInt(outcomeVal))) {
+        forcedSum = parseInt(outcomeVal);
+      }
+    }
+
+    const choices = diceSelectedChoicesRef.current.length > 0 
+      ? diceSelectedChoicesRef.current 
+      : committedChoicesRef.current;
+    const hasChoices = choices && choices.length > 0;
+
+    if (forcedSum !== null) {
+      let found = false;
+      let tries = 0;
+      while (!found && tries < 1000) {
+        d1 = Math.floor(Math.random() * 6) + 1;
+        d2 = Math.floor(Math.random() * 6) + 1;
+        d3 = Math.floor(Math.random() * 6) + 1;
+        sum = d1 + d2 + d3;
+        if (sum === forcedSum) found = true;
+        tries++;
+      }
+      if (!found) {
+        d1 = Math.max(1, Math.min(6, Math.floor(forcedSum / 3)));
+        d2 = Math.max(1, Math.min(6, Math.floor((forcedSum - d1) / 2)));
+        d3 = Math.max(1, Math.min(6, forcedSum - d1 - d2));
+        sum = d1 + d2 + d3;
+      }
+    } else if (targetDecision === 'win') {
       let found = false;
       let tries = 0;
       while (!found && tries < 1000) {
@@ -468,41 +694,57 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
         const isOdd = sum % 2 === 1;
         const isEven = sum % 2 === 0;
 
-        if (outcomeVal === 'win') {
-          if (targetVal === 'any') {
-            const hasWon = choices.some(choice => {
-              if (choice === 'big') return isBig;
-              if (choice === 'small') return isSmall;
-              if (choice === 'odd') return isOdd;
-              if (choice === 'even') return isEven;
-              return sum === parseInt(choice);
-            });
-            if (hasWon || choices.length === 0) found = true;
-          } else {
-            let match = false;
-            if (targetVal === 'big') match = isBig;
-            else if (targetVal === 'small') match = isSmall;
-            else if (targetVal === 'odd') match = isOdd;
-            else if (targetVal === 'even') match = isEven;
-            else match = sum === parseInt(targetVal);
-            if (match) found = true;
-          }
-        } else if (outcomeVal === 'lose') {
-          const hasWon = choices.some(choice => {
+        let choicesMatch = true;
+        if (hasChoices) {
+          choicesMatch = choices.some(choice => {
             if (choice === 'big') return isBig;
             if (choice === 'small') return isSmall;
             if (choice === 'odd') return isOdd;
             if (choice === 'even') return isEven;
             return sum === parseInt(choice);
           });
-          if (!hasWon) found = true;
+        }
+
+        let targetMatch = true;
+        if (targetCombo !== 'any') {
+          if (targetCombo === 'big') targetMatch = isBig;
+          else if (targetCombo === 'small') targetMatch = isSmall;
+          else if (targetCombo === 'odd') targetMatch = isOdd;
+          else if (targetCombo === 'even') targetMatch = isEven;
+          else targetMatch = sum === parseInt(targetCombo);
+        }
+
+        if (hasChoices ? (targetCombo === 'any' ? choicesMatch : (choicesMatch && targetMatch)) : targetMatch) {
+          found = true;
         }
         tries++;
       }
-    } else if (isUserRiggingActive) {
-      const outcomeVal = latestUser.nextDiceResult;
-      const choices = diceSelectedChoicesRef.current;
-
+      if (!found) {
+        // Direct deterministic winning roll construction
+        if (hasChoices) {
+          const firstChoice = choices[0];
+          if (firstChoice === 'small') {
+            d1 = 2; d2 = 2; d3 = 3; sum = 7;
+          } else if (firstChoice === 'big') {
+            d1 = 4; d2 = 5; d3 = 5; sum = 14;
+          } else if (firstChoice === 'odd') {
+            d1 = 3; d2 = 3; d3 = 3; sum = 9;
+          } else if (firstChoice === 'even') {
+            d1 = 2; d2 = 4; d3 = 4; sum = 10;
+          } else if (!isNaN(parseInt(firstChoice))) {
+            const val = parseInt(firstChoice);
+            d1 = Math.max(1, Math.min(6, Math.floor(val / 3)));
+            d2 = Math.max(1, Math.min(6, Math.floor((val - d1) / 2)));
+            d3 = Math.max(1, Math.min(6, val - d1 - d2));
+            sum = d1 + d2 + d3;
+          } else {
+            d1 = 4; d2 = 5; d3 = 5; sum = 14;
+          }
+        } else {
+          d1 = 4; d2 = 5; d3 = 5; sum = 14;
+        }
+      }
+    } else if (targetDecision === 'lose') {
       let found = false;
       let tries = 0;
       while (!found && tries < 1000) {
@@ -515,20 +757,47 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
         const isOdd = sum % 2 === 1;
         const isEven = sum % 2 === 0;
 
-        const hasWon = choices.some(choice => {
-          if (choice === 'big') return isBig;
-          if (choice === 'small') return isSmall;
-          if (choice === 'odd') return isOdd;
-          if (choice === 'even') return isEven;
-          return sum === parseInt(choice);
-        });
+        let userWonAny = false;
+        if (hasChoices) {
+          userWonAny = choices.some(choice => {
+            if (choice === 'big') return isBig;
+            if (choice === 'small') return isSmall;
+            if (choice === 'odd') return isOdd;
+            if (choice === 'even') return isEven;
+            return sum === parseInt(choice);
+          });
+        }
+        let targetMatch = false;
+        if (targetCombo !== 'any') {
+          if (targetCombo === 'big') targetMatch = isBig;
+          else if (targetCombo === 'small') targetMatch = isSmall;
+          else if (targetCombo === 'odd') targetMatch = isOdd;
+          else if (targetCombo === 'even') targetMatch = isEven;
+          else targetMatch = sum === parseInt(targetCombo);
+        }
 
-        if (outcomeVal === 'win') {
-          if (hasWon || choices.length === 0) found = true;
-        } else {
-          if (!hasWon) found = true;
+        if (!userWonAny && !targetMatch) {
+          found = true;
         }
         tries++;
+      }
+      if (!found) {
+        if (hasChoices) {
+          const firstChoice = choices[0];
+          if (firstChoice === 'small') {
+            d1 = 4; d2 = 5; d3 = 5; sum = 14; // Big
+          } else if (firstChoice === 'big') {
+            d1 = 2; d2 = 2; d3 = 3; sum = 7; // Small
+          } else if (firstChoice === 'odd') {
+            d1 = 2; d2 = 4; d3 = 4; sum = 10; // Even
+          } else if (firstChoice === 'even') {
+            d1 = 3; d2 = 3; d3 = 3; sum = 9; // Odd
+          } else {
+            d1 = 1; d2 = 2; d3 = 3; sum = 6;
+          }
+        } else {
+          d1 = 1; d2 = 2; d3 = 3; sum = 6;
+        }
       }
     } else {
       const roll = getDeterministicRollForPeriod(drawingPeriod, globalDiceOverrides);
@@ -555,7 +824,7 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
         setDicePeriod(prev => prev + 1);
       }
 
-      // Consume/Reset Rigging on Firestore
+      // Consume/Reset Instant Rigging on Firestore if it was one-time
       if (latestUser?.nextDiceResult && latestUser.nextDiceResult !== 'random') {
         const userTargetSlot = latestUser?.nextDiceTimeSlot || 'any';
         const curPeriod = getRealPeriod();
@@ -569,29 +838,42 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
         }
       }
 
-      // Consume/Reset slotOverride on Firestore
+      // Consume/Reset one-time slotOverride on Firestore
       const curPeriod = getRealPeriod();
-      if (latestUser?.diceOverrides?.[curPeriod]) {
+      if (latestUser?.diceOverrides) {
         const updatedOverrides = { ...latestUser.diceOverrides };
-        delete updatedOverrides[curPeriod];
-        adminUpdateUserProfile(latestUser.id, {
-          diceOverrides: updatedOverrides
-        }).catch(console.error);
+        let changed = false;
+        if (updatedOverrides[curPeriod] && !updatedOverrides[curPeriod].isRepeating) {
+          delete updatedOverrides[curPeriod];
+          changed = true;
+        }
+        if (updatedOverrides[prevPeriod] && !updatedOverrides[prevPeriod].isRepeating) {
+          delete updatedOverrides[prevPeriod];
+          changed = true;
+        }
+        if (changed) {
+          adminUpdateUserProfile(latestUser.id, { diceOverrides: updatedOverrides }).catch(console.error);
+        }
       }
 
-      if (diceIsCommittedRef.current && diceSelectedChoicesRef.current.length > 0) {
-        const choices = diceSelectedChoicesRef.current;
+      const activeChoices = diceSelectedChoicesRef.current.length > 0 
+        ? diceSelectedChoicesRef.current 
+        : committedChoicesRef.current;
+
+      if (diceIsCommittedRef.current && activeChoices.length > 0) {
         const betAmt = perBetAmountRef.current;
-        const totalWager = choices.length * betAmt;
+        const totalWager = activeChoices.length * betAmt;
 
         const isSmall = sum >= 3 && sum <= 10;
         const isBig = sum >= 11 && sum <= 18;
         const isOdd = sum % 2 === 1;
         const isEven = sum % 2 === 0;
 
-        let totalWin = 0;
+        let actualChoiceHits = 0;
+        let naturalWin = 0;
         const profitMult = currentDiceGame?.manualProfitRate || 1.0;
-        choices.forEach(choice => {
+
+        activeChoices.forEach(choice => {
           let won = false;
           let odds = 1.96;
           if (choice === 'big') {
@@ -610,71 +892,29 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
           }
 
           if (won) {
-            totalWin += betAmt * odds * profitMult;
+            actualChoiceHits++;
+            naturalWin += betAmt * odds * profitMult;
           }
         });
 
-        // Check if user override is active and override totalWin based on win/loss percentage!
-        const cPeriod = getRealPeriod();
-        const activeSlotOverride = latestUser?.diceOverrides?.[cPeriod];
-        const uTargetSlot = latestUser?.nextDiceTimeSlot || 'any';
-        const isUserRiggingActive = latestUser?.nextDiceResult && latestUser.nextDiceResult !== 'random' && (uTargetSlot === 'any' || uTargetSlot === cPeriod);
+        let totalWin = naturalWin;
 
-        // Fetch global overrides
-        const globalDiceOverrides = currentDiceGame?.globalDiceOverrides || {};
-        const now = new Date();
-        const slot = getCurrentTimeSlot();
-        const activeSchedule = slot ? currentDiceGame?.diceSchedules?.find(s => s.timeSlot === slot) : null;
-        const pIndex = Math.floor((now.getHours() * 60 + now.getMinutes()) / 5) + 1;
-        const pIdxStr = String(pIndex).padStart(3, '0');
-        const activeGlobalOverride = globalDiceOverrides[cPeriod] || globalDiceOverrides[`daily-${pIdxStr}`];
-
-        if (activeSlotOverride && activeSlotOverride.outcome !== 'random') {
-          if (activeSlotOverride.outcome === 'win') {
-            const pct = activeSlotOverride.winPct !== undefined ? activeSlotOverride.winPct : 96;
-            totalWin = totalWager + (totalWager * (pct / 100));
-          } else if (activeSlotOverride.outcome === 'lose') {
-            totalWin = 0;
-          }
-        } else if (isUserRiggingActive) {
-          const customWinPct = latestUser?.nextDiceWinPercentage;
-
-          let actuallyWonAny = false;
-          choices.forEach(choice => {
-            let won = false;
-            if (choice === 'big') won = isBig;
-            else if (choice === 'small') won = isSmall;
-            else if (choice === 'odd') won = isOdd;
-            else if (choice === 'even') won = isEven;
-            else won = sum === parseInt(choice);
-            if (won) actuallyWonAny = true;
-          });
-
-          if (actuallyWonAny) {
-            if (customWinPct !== undefined && customWinPct !== null) {
-              if (customWinPct < 100) {
-                totalWin = totalWager + (totalWager * (customWinPct / 100));
-              } else {
-                totalWin = totalWager * (customWinPct / 100);
-              }
-            }
+        if (overrideType !== 'none') {
+          if (targetDecision === 'win' || actualChoiceHits > 0) {
+            const profitRate = winPctToUse / 100;
+            totalWin = totalWager + (totalWager * profitRate);
           } else {
-            totalWin = 0;
-          }
-        } else if (activeGlobalOverride && activeGlobalOverride.outcome !== 'random') {
-          if (activeGlobalOverride.outcome === 'win') {
-            const pct = activeGlobalOverride.winPct !== undefined ? activeGlobalOverride.winPct : 100;
-            if (pct < 100) {
-              totalWin = totalWager + (totalWager * (pct / 100));
+            if (lossPctToUse < 100) {
+              totalWin = totalWager * ((100 - lossPctToUse) / 100);
             } else {
-              totalWin = totalWager * (pct / 100);
+              totalWin = 0;
             }
-          } else if (activeGlobalOverride.outcome === 'lose') {
-            totalWin = 0;
           }
         }
 
         // Add active schedule jackpot / golden hour bonus to user's winning
+        const slot = getCurrentTimeSlot();
+        const activeSchedule = slot ? currentDiceGame?.diceSchedules?.find(s => s.timeSlot === slot) : null;
         if (totalWin > 0 && activeSchedule && activeSchedule.jackpotMoney > 0) {
           totalWin += activeSchedule.jackpotMoney;
         }
@@ -682,26 +922,44 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
         const netMultiplier = totalWager > 0 ? parseFloat((totalWin / totalWager).toFixed(2)) : 0;
         const outcomeDesc = `Roll: ${d1},${d2},${d3} (Sum: ${sum})`;
 
-        playGame('dice', totalWager, netMultiplier, outcomeDesc, parseFloat(totalWin.toFixed(2)));
+        const betIdToSettle = activeBetIdRef.current || `BET_AUTO_${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
-        const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
+        // Settle atomically on Firestore
+        settleActiveDiceBet(
+          betIdToSettle,
+          parseFloat(totalWin.toFixed(2)),
+          netMultiplier,
+          outcomeDesc,
+          {
+            diceRoll: [d1, d2, d3],
+            diceSum: sum,
+            winPercentageApplied: overrideType !== 'none' ? winPctToUse : undefined
+          }
+        ).catch(console.error);
+
+        const timeStr = getISTParts().formattedIST;
         const resultDesc = `${sum} (${isBig ? 'Big' : 'Small'}, ${isOdd ? 'Odd' : 'Even'})`;
         const newLocalRecord = {
-          id: `BET_LOCAL_${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+          id: betIdToSettle,
           period: getDisplayPeriod(),
           betAmount: totalWager,
           result: resultDesc,
-          choice: choices.map(c => c.toUpperCase()).join(', '),
+          choice: activeChoices.map(c => c.toUpperCase()).join(', '),
           time: timeStr,
           status: (totalWin > 0 ? 'win' : 'loss') as 'win' | 'loss',
           winAmount: parseFloat(totalWin.toFixed(2))
         };
 
         setDiceUserBets(prev => {
-          const updated = [newLocalRecord, ...prev].slice(0, 40);
+          const updated = [newLocalRecord, ...prev.filter(p => p.id !== betIdToSettle)].slice(0, 40);
           localStorage.setItem('dice_user_bets', JSON.stringify(updated));
           return updated;
         });
+
+        // Clear cached active bet on localStorage once settled
+        if (latestUser?.id) {
+          localStorage.removeItem(`active_dice_bet_${latestUser.id}`);
+        }
 
         setCelebrationWinnings(totalWin);
         setCelebrationMult(netMultiplier);
@@ -717,11 +975,14 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
 
         setDiceIsCommitted(false);
         setDiceSelectedChoices([]);
+        committedChoicesRef.current = [];
+        committedBetPeriodRef.current = '';
+        activeBetIdRef.current = null;
       }
     }, 1500);
   };
 
-  const handleConfirmDiceBet = () => {
+  const handleConfirmDiceBet = async () => {
     if (diceIsCommitted) return;
     if (diceSelectedChoices.length === 0) {
       alert("Please choose at least one bet option first!");
@@ -729,16 +990,32 @@ export const GameCenter: React.FC<GameCenterProps> = ({ initialGameId, onClearGa
     }
 
     const totalWager = diceSelectedChoices.length * perBetAmount;
-    const balance = currentUser.balance;
-    if (balance < totalWager) {
+    const balance = currentUser?.balance || 0;
+    const bonusBalance = currentUser?.bonusBalance || 0;
+    if (balance + bonusBalance < totalWager) {
       alert("Insufficient wallet balance for this bet!");
       return;
     }
 
-    setDiceIsCommitted(true);
+    const curPeriod = getRealPeriod();
+    committedBetPeriodRef.current = curPeriod;
+    committedChoicesRef.current = [...diceSelectedChoices];
 
-    if (diceTimer > 3) {
-      setDiceTimer(3);
+    try {
+      const betId = await placeActiveDiceBet(totalWager, {
+        period: curPeriod,
+        choices: diceSelectedChoices,
+        perBetAmount
+      });
+      activeBetIdRef.current = betId;
+      setDiceIsCommitted(true);
+
+      if (diceTimer > 3) {
+        setDiceTimer(3);
+      }
+    } catch (err: any) {
+      console.error("Failed to place active dice bet:", err);
+      alert(`Bet error: ${err.message || 'Could not place bet'}`);
     }
   };
 

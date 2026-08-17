@@ -731,6 +731,9 @@ export const AdminPanel: React.FC = () => {
         nextSpinResult: selectedSpinResult,
         nextLuckyResult: selectedLuckyResult,
         nextDiceResult: selectedDiceResult,
+        nextDiceWinPercentage: selectedDiceWinPercentage,
+        nextDiceLossPercentage: selectedDiceLossPercentage,
+        nextDiceTimeSlot: selectedDiceTimeSlot,
         nextCoinFlipResult: selectedCoinFlipResult,
         nextColorMatchResult: selectedColorMatchResult,
         nextLuckySevenResult: selectedLuckySevenResult,
@@ -3409,7 +3412,32 @@ export const AdminPanel: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Conditional Payout Overrides based on Win/Lose strategy */}
+                    {/* Conditional Payout Overrides based on Win/Lose/Random strategy */}
+                    {selectedDiceResult === 'random' && (
+                      <div className="space-y-2 pt-2 border-t border-slate-200/60 animate-fadeIn">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block font-mono">Win Probability Rate (%):</span>
+                          <span className="text-xs font-black text-blue-600 font-mono bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-lg">
+                            {selectedDiceWinPercentage ?? 50}%
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="5"
+                            value={selectedDiceWinPercentage ?? 50}
+                            onChange={(e) => setSelectedDiceWinPercentage(parseInt(e.target.value))}
+                            className="flex-1 accent-blue-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                          />
+                        </div>
+                        <p className="text-[9.5px] text-slate-400">
+                          Percentage chance the user has to win on random outcome. E.g. 75% gives 75% win probability.
+                        </p>
+                      </div>
+                    )}
+
                     {selectedDiceResult === 'win' && (
                       <div className="space-y-2 pt-2 border-t border-slate-200/60 animate-fadeIn">
                         <span className="text-[10px] font-bold text-pink-600 uppercase tracking-wider block font-mono">Configure Win Payout Percentage:</span>

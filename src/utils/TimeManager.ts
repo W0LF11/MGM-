@@ -1,0 +1,282 @@
+/**
+ * Centralized TimeManager Utility
+ * 
+ * Enforces Indian Standard Time (IST - Asia/Kolkata, UTC+05:30) across all game logic,
+ * period computations, server-side/client-side betting outcome windows, and temporal audits.
+ * India does not observe Daylight Savings Time (DST), maintaining a constant +05:30 offset.
+ */
+
+export interface ISTTimeParts {
+  year: number;
+  month: number; // 1 - 12
+  day: number; // 1 - 31
+  hours: number; // 0 - 23
+  minutes: number; // 0 - 59
+  seconds: number; // 0 - 59
+  totalMinutesOfDay: number; // 0 - 1439
+  periodIndex5Min: number; // 1 - 288
+  periodIndex1Min: number; // 1 - 1440
+  dateStr: string; // "YYYY-MM-DD"
+  timeStr: string; // "HH:MM:SS"
+  timeSlot5Min: string; // "HH:MM" e.g. "17:15"
+  timeSlotRange5Min: string; // "17:15 - 17:20"
+  periodId: string; // "YYYYMMDD-XXX" e.g. "20260817-208"
+  dailyKey: string; // "daily-XXX" e.g. "daily-208"
+  formattedIST: string; // "YYYY-MM-DD HH:mm:ss IST"
+  remainingSeconds5Min: number; // seconds remaining in current 5-min slot
+}
+
+export interface BetISTStamp {
+  date: string; // "YYYY-MM-DD"
+  timeIST: string; // "YYYY-MM-DD HH:mm:ss IST"
+  period: string; // "YYYYMMDD-XXX"
+  dailyKey: string; // "daily-XXX"
+  periodIndex: number;
+  timestamp: number;
+}
+
+export class TimeManager {
+  private static serverTimeOffsetMs: number = 0;
+
+  /**
+   * Synchronize local client time with server/cloud timestamp
+   */
+  public static syncServerTime(serverTimestampMs: number): void {
+    if (typeof serverTimestampMs === 'number' && !isNaN(serverTimestampMs)) {
+      this.serverTimeOffsetMs = serverTimestampMs - Date.now();
+    }
+  }
+
+  /**
+   * Get current timestamp corrected with server offset
+   */
+  public static now(): number {
+    return Date.now() + this.serverTimeOffsetMs;
+  }
+
+  /**
+   * Returns exact IST time components for any given date or timestamp
+   */
+  public static getParts(baseDate: Date | number = this.now()): ISTTimeParts {
+    const d = typeof baseDate === 'number' ? new Date(baseDate) : baseDate;
+    
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+
+    const parts = formatter.formatToParts(d);
+    const partMap: Record<string, string> = {};
+    parts.forEach(p => {
+      partMap[p.type] = p.value;
+    });
+
+    const year = parseInt(partMap.year) || 2026;
+    const month = parseInt(partMap.month) || 1;
+    const day = parseInt(partMap.day) || 1;
+    let hours = parseInt(partMap.hour) || 0;
+    if (hours === 24) hours = 0;
+    const minutes = parseInt(partMap.minute) || 0;
+    const seconds = parseInt(partMap.second) || 0;
+
+    const totalMinutesOfDay = hours * 60 + minutes;
+    const periodIndex5Min = Math.floor(totalMinutesOfDay / 5) + 1;
+    const periodIndex1Min = totalMinutesOfDay + 1;
+
+    const idx5MinStr = String(periodIndex5Min).padStart(3, '0');
+    const yyyymmdd = `${year}${String(month).padStart(2, '0')}${String(day).padStart(2, '0')}`;
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+    const slotStartMin = Math.floor(minutes / 5) * 5;
+    const timeSlot5Min = `${String(hours).padStart(2, '0')}:${String(slotStartMin).padStart(2, '0')}`;
+
+    const slotEndMin = (slotStartMin + 5) % 60;
+    const slotEndHr = slotStartMin + 5 >= 60 ? (hours + 1) % 24 : hours;
+    const timeSlotRange5Min = `${timeSlot5Min} - ${String(slotEndHr).padStart(2, '0')}:${String(slotEndMin).padStart(2, '0')}`;
+
+    const periodId = `${yyyymmdd}-${idx5MinStr}`;
+    const dailyKey = `daily-${idx5MinStr}`;
+    const formattedIST = `${dateStr} ${timeStr} IST`;
+
+    const remainingSeconds5Min = 300 - ((minutes % 5) * 60 + seconds);
+
+    return {
+      year,
+      month,
+      day,
+      hours,
+      minutes,
+      seconds,
+      totalMinutesOfDay,
+      periodIndex5Min,
+      periodIndex1Min,
+      dateStr,
+      timeStr,
+      timeSlot5Min,
+      timeSlotRange5Min,
+      periodId,
+      dailyKey,
+      formattedIST,
+      remainingSeconds5Min
+    };
+  }
+
+  /**
+   * Get current or target 5-minute period ID (e.g. "20260817-208")
+   */
+  public static getPeriod(baseDate: Date | number = this.now()): string {
+    return this.getParts(baseDate).periodId;
+  }
+
+  /**
+   * Get current or target 5-minute daily key (e.g. "daily-208")
+   */
+  public static getDailyKey(baseDate: Date | number = this.now()): string {
+    return this.getParts(baseDate).dailyKey;
+  }
+
+  /**
+   * Get current 5-minute period index (1 - 288)
+   */
+  public static getPeriodIndex(baseDate: Date | number = this.now()): number {
+    return this.getParts(baseDate).periodIndex5Min;
+  }
+
+  /**
+   * Get seconds remaining in the current 5-minute gaming cycle
+   */
+  public static getRemainingSeconds(baseDate: Date | number = this.now()): number {
+    return this.getParts(baseDate).remainingSeconds5Min;
+  }
+
+  /**
+   * Get the start time of the current 5-minute window (e.g. "17:15")
+   */
+  public static getTimeSlot(baseDate: Date | number = this.now()): string {
+    return this.getParts(baseDate).timeSlot5Min;
+  }
+
+  /**
+   * Get formatted IST string e.g. "2026-08-17 17:15:30 IST"
+   */
+  public static formatIST(baseDate: Date | number = this.now()): string {
+    return this.getParts(baseDate).formattedIST;
+  }
+
+  /**
+   * Calculates a period ID with an offset of 5-minute intervals (e.g. +1 for next, -1 for previous)
+   */
+  public static getPeriodWithOffset(offset5Min: number, baseDate: Date | number = this.now()): string {
+    const d = typeof baseDate === 'number' ? new Date(baseDate) : baseDate;
+    const offsetMs = offset5Min * 5 * 60 * 1000;
+    const offsetDate = new Date(d.getTime() + offsetMs);
+    return this.getParts(offsetDate).periodId;
+  }
+
+  /**
+   * Calculates full IST parts with an offset of 5-minute intervals
+   */
+  public static getPartsWithOffset(offset5Min: number, baseDate: Date | number = this.now()): ISTTimeParts {
+    const d = typeof baseDate === 'number' ? new Date(baseDate) : baseDate;
+    const offsetMs = offset5Min * 5 * 60 * 1000;
+    const offsetDate = new Date(d.getTime() + offsetMs);
+    return this.getParts(offsetDate);
+  }
+
+  /**
+   * Generates candidate override keys for a temporal window to match against user/global overrides.
+   * Covers: Current period, Daily repeating key, Current time slot, Adjacent previous/next windows for boundary tolerance.
+   */
+  public static getCandidatePeriodKeys(periodIdOrDate?: string | Date | number): string[] {
+    let targetDate = new Date(this.now());
+    if (typeof periodIdOrDate === 'string' && periodIdOrDate.includes('-')) {
+      const parts = periodIdOrDate.split('-');
+      const pIdx = parts[1];
+      const dailyKey = `daily-${pIdx}`;
+      return [periodIdOrDate, dailyKey];
+    } else if (periodIdOrDate instanceof Date) {
+      targetDate = periodIdOrDate;
+    } else if (typeof periodIdOrDate === 'number') {
+      targetDate = new Date(periodIdOrDate);
+    }
+
+    const current = this.getParts(targetDate);
+    const prev = this.getPartsWithOffset(-1, targetDate);
+    const next = this.getPartsWithOffset(1, targetDate);
+
+    return [
+      current.periodId,
+      current.dailyKey,
+      current.timeSlot5Min,
+      prev.periodId,
+      prev.dailyKey,
+      next.periodId,
+      next.dailyKey
+    ];
+  }
+
+  /**
+   * Checks if an override slot matches the current or provided temporal window
+   */
+  public static matchesTemporalWindow(targetSlot: string, currentWindowPeriod?: string | Date | number): boolean {
+    if (!targetSlot || targetSlot === 'any') return true;
+    const candidates = this.getCandidatePeriodKeys(currentWindowPeriod);
+    return candidates.includes(targetSlot);
+  }
+
+  /**
+   * Helper to calculate Period & Time Range from manual user inputs (e.g. from Admin UI in IST)
+   */
+  public static calculatePeriodFromInput(dateStr: string, hourStr: string, minuteStr: string, isRepeating: boolean) {
+    const hrVal = parseInt(hourStr) || 0;
+    const minVal = parseInt(minuteStr) || 0;
+    const periodIndex = Math.floor((hrVal * 60 + minVal) / 5) + 1;
+    const idxStr = String(periodIndex).padStart(3, '0');
+
+    const cleanDateStr = dateStr || this.getParts().dateStr;
+    const parts = cleanDateStr.split('-');
+    const yyyymmdd = parts.length === 3 ? `${parts[0]}${parts[1]}${parts[2]}` : this.getParts().dateStr.replace(/-/g, '');
+
+    const periodId = isRepeating ? `daily-${idxStr}` : `${yyyymmdd}-${idxStr}`;
+    const endMin = (minVal + 5) % 60;
+    const endHr = minVal + 5 >= 60 ? (hrVal + 1) % 24 : hrVal;
+    const timeStr = `${String(hrVal).padStart(2, '0')}:${String(minVal).padStart(2, '0')} - ${String(endHr).padStart(2, '0')}:${String(endMin).padStart(2, '0')} (IST)`;
+
+    return { periodId, timeStr, periodIndex, idxStr };
+  }
+
+  /**
+   * Creates a tamper-proof Bet IST Stamp for atomic bet tracking
+   */
+  public static createBetISTStamp(baseDate: Date | number = this.now()): BetISTStamp {
+    const parts = this.getParts(baseDate);
+    return {
+      date: parts.dateStr,
+      timeIST: parts.formattedIST,
+      period: parts.periodId,
+      dailyKey: parts.dailyKey,
+      periodIndex: parts.periodIndex5Min,
+      timestamp: typeof baseDate === 'number' ? baseDate : baseDate.getTime()
+    };
+  }
+}
+
+// Standalone function exports for backward compatibility & easy functional imports
+export const getISTParts = (baseDate?: Date | number) => TimeManager.getParts(baseDate);
+export const getISTPeriod = (baseDate?: Date | number) => TimeManager.getPeriod(baseDate);
+export const getISTRemainingSeconds = (baseDate?: Date | number) => TimeManager.getRemainingSeconds(baseDate);
+export const getISTTimeSlot = (baseDate?: Date | number) => TimeManager.getTimeSlot(baseDate);
+export const getISTPeriodIndex = (baseDate?: Date | number) => TimeManager.getPeriodIndex(baseDate);
+export const getISTPeriodWithOffset = (offset5Min: number, baseDate?: Date | number) => TimeManager.getPeriodWithOffset(offset5Min, baseDate);
+export const getISTPartsWithOffset = (offset5Min: number, baseDate?: Date | number) => TimeManager.getPartsWithOffset(offset5Min, baseDate);
+export const getCandidatePeriodKeys = (periodIdOrDate?: string | Date | number) => TimeManager.getCandidatePeriodKeys(periodIdOrDate);
+export const calculateISTPeriodFromInput = (dateStr: string, hourStr: string, minuteStr: string, isRepeating: boolean) => 
+  TimeManager.calculatePeriodFromInput(dateStr, hourStr, minuteStr, isRepeating);
+export const getISTTimestamp = (baseDate?: Date | number) => TimeManager.now();

@@ -20,6 +20,7 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from './firebase';
+import { TimeManager, getISTParts } from '../utils/TimeManager';
 import { 
   UserProfile, 
   LoginSession, 
@@ -76,6 +77,8 @@ interface PlatformContextType {
   
   // Game Actions
   playGame: (gameId: string, betAmount: number, multiplier: number, outcome: string, winAmount: number) => Promise<void>;
+  placeActiveDiceBet: (betAmount: number, details: { period: string; choices: string[]; perBetAmount: number }) => Promise<string>;
+  settleActiveDiceBet: (betId: string, winAmount: number, multiplier: number, outcome: string, details: { diceRoll: number[]; diceSum: number; winPercentageApplied?: number }) => Promise<void>;
   
   // Ticket Actions
   createTicket: (title: string, category: SupportTicket['category'], priority: SupportTicket['priority'], initialMessage: string) => Promise<string | undefined>;
@@ -127,8 +130,8 @@ const PlatformContext = createContext<PlatformContextType | undefined>(undefined
 // Generate random IDs
 const genId = () => Math.random().toString(36).substr(2, 9).toUpperCase();
 
-// Helper to format date
-const formatDate = () => new Date().toISOString();
+// Helper to format date in Indian Standard Time (IST)
+const formatDate = () => TimeManager.formatIST();
 
 // Derivative Password helper to maintain identical login page behavior
 const getDerivedPassword = (email: string) => {
@@ -398,26 +401,31 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const unsubAuth = onAuthStateChanged(auth, async (authUser) => {
       try {
         if (authUser) {
+          const emailLower = authUser.email?.toLowerCase() || '';
+          const isAdminEmail = emailLower === 'wolfsingh1110@gmail.com' || emailLower === 'vishalpal@gmail.com' || emailLower === 'admin@luckyplatform.com';
+          const determinedRole = isAdminEmail ? 'admin' : 'user';
+
           try {
             // Fetch user profile from Firestore
             const profileRef = doc(db, 'users', authUser.uid);
-            const profileSnap = await getDoc(profileRef);
+            let profileSnap: any = null;
+            try {
+              profileSnap = await getDoc(profileRef);
+            } catch (snapErr) {
+              console.warn('[onAuthStateChanged] Firestore offline or connecting, using cached profile state.');
+            }
 
-            if (profileSnap.exists()) {
+            if (profileSnap && profileSnap.exists()) {
               const data = profileSnap.data() as UserProfile;
               setCurrentUser(data);
               setRoleState(data.role || 'user');
-            } else {
+            } else if (profileSnap && !profileSnap.exists()) {
               // If the user is currently registering via register(), skip writing the default profile to avoid a race condition.
               if (isRegisteringRef.current) {
                 console.log('[onAuthStateChanged] Registration in progress, skipping default profile generation.');
                 return;
               }
               // Document does not exist yet (e.g. registered in auth but db write failed or delayed)
-              const emailLower = authUser.email?.toLowerCase() || '';
-              const isAdminEmail = emailLower === 'wolfsingh1110@gmail.com' || emailLower === 'vishalpal@gmail.com' || emailLower === 'admin@luckyplatform.com';
-              const determinedRole = isAdminEmail ? 'admin' : 'user';
-              
               const newProfile: UserProfile = {
                 id: authUser.uid,
                 username: authUser.displayName || authUser.email?.split('@')[0] || 'gamer_' + authUser.uid.slice(0, 5),
@@ -434,12 +442,36 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 role: determinedRole,
                 creditScore: 100
               };
-              await setDoc(profileRef, newProfile);
+              try {
+                await setDoc(profileRef, newProfile);
+              } catch (setErr) {
+                console.warn('[onAuthStateChanged] Deferred profile setDoc due to offline status:', setErr);
+              }
               setCurrentUser(newProfile);
+              setRoleState(determinedRole);
+            } else {
+              // Fallback when offline and profileSnap could not be fetched
+              const fallbackProfile: UserProfile = {
+                id: authUser.uid,
+                username: authUser.displayName || authUser.email?.split('@')[0] || 'gamer_' + authUser.uid.slice(0, 5),
+                email: authUser.email || '',
+                phone: '',
+                avatar: '🦊',
+                status: 'active',
+                balance: 10.0,
+                bonusBalance: 50.0,
+                referralCode: (authUser.email?.split('@')[0] || 'GAMER').toUpperCase().slice(0, 5) + Math.floor(Math.random() * 90 + 10),
+                isEmailVerified: authUser.emailVerified || false,
+                isMobileVerified: false,
+                createdAt: formatDate(),
+                role: determinedRole,
+                creditScore: 100
+              };
+              setCurrentUser(fallbackProfile);
               setRoleState(determinedRole);
             }
           } catch (err) {
-            console.error('Error fetching profile snapshot:', err);
+            console.warn('[onAuthStateChanged] Profile load notice:', err);
           }
         } else {
           setCurrentUser(null);
@@ -1231,12 +1263,199 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       localStorage.setItem('achievements', JSON.stringify(updatedAchievements));
 
       if (status === 'win') {
-        addLocalNotification('🎉 Congratulations!', `You won $${winAmount.toFixed(2)} on ${games.find(g => g.id === gameId)?.name || 'Interactive Game'}! (x${multiplier})`, 'system');
+        addLocalNotification('🎉 Congratulations!', `You won ${winAmount.toFixed(2)} on ${games.find(g => g.id === gameId)?.name || 'Interactive Game'}! (x${multiplier})`, 'system');
       }
     } catch (err) {
       console.error('Wager play transaction aborted:', err);
       alert(err instanceof Error ? err.message : 'Play Game failed');
     }
+  };
+
+  // Atomic Dice Bet Placement with Persistence & IST Stamping
+  const placeActiveDiceBet = async (
+    betAmount: number, 
+    details: { period: string; choices: string[]; perBetAmount: number }
+  ): Promise<string> => {
+    if (!currentUser) throw new Error('User not authenticated');
+    const istParts = getISTParts();
+    const betId = `BET_${genId()}`;
+    const betTxId = `TX_${genId()}`;
+    const gameRef = doc(db, 'games', 'dice');
+    const uRef = doc(db, 'users', currentUser.id);
+
+    await runTransaction(db, async (tx) => {
+      const uSnap = await tx.get(uRef);
+      if (!uSnap.exists()) throw new Error('User document not found');
+      const uData = uSnap.data() as UserProfile;
+
+      let curBal = uData.balance;
+      let curBonus = uData.bonusBalance;
+      let balanceUsed: 'real' | 'bonus' | 'mixed' = 'real';
+
+      if (curBal >= betAmount) {
+        curBal -= betAmount;
+        balanceUsed = 'real';
+      } else if (curBonus >= betAmount) {
+        curBonus -= betAmount;
+        balanceUsed = 'bonus';
+      } else if (curBal + curBonus >= betAmount) {
+        const remainderNeeded = betAmount - curBonus;
+        curBonus = 0;
+        curBal -= remainderNeeded;
+        balanceUsed = 'mixed';
+      } else {
+        throw new Error('Insufficient wallet balance for this bet!');
+      }
+
+      const betObj: BetRecord = {
+        id: betId,
+        gameId: 'dice',
+        gameName: 'Dice 5-Minute Challenge',
+        userId: currentUser.id,
+        username: currentUser.username,
+        betAmount,
+        winAmount: 0,
+        multiplier: 0,
+        outcome: 'Pending Draw',
+        date: istParts.dateStr,
+        status: 'pending',
+        period: details.period,
+        choices: details.choices,
+        perBetAmount: details.perBetAmount,
+        timeIST: istParts.formattedIST,
+        settlementStatus: 'pending'
+      };
+
+      const betTxObj: Transaction = {
+        id: betTxId,
+        userId: currentUser.id,
+        username: currentUser.username,
+        type: 'bet',
+        amount: betAmount,
+        status: 'completed',
+        reference: `STK_${betId.slice(4)}`,
+        date: istParts.formattedIST,
+        description: `Wagered stake on Dice 5-Minute Challenge (${balanceUsed === 'real' ? 'Real Balance' : balanceUsed === 'bonus' ? 'Bonus Balance' : 'Mixed Balance'}) [Period: ${details.period}]`
+      };
+
+      tx.update(uRef, {
+        balance: parseFloat(curBal.toFixed(2)),
+        bonusBalance: parseFloat(curBonus.toFixed(2)),
+        totalWagered: parseFloat(((uData.totalWagered || 0) + betAmount).toFixed(2))
+      });
+
+      tx.set(doc(db, 'bets', betId), betObj);
+      tx.set(doc(db, 'transactions', betTxId), betTxObj);
+    });
+
+    // Local storage instant fallback
+    try {
+      const localRecord = {
+        id: betId,
+        period: details.period,
+        choices: details.choices,
+        perBetAmount: details.perBetAmount,
+        betAmount,
+        timeIST: istParts.formattedIST,
+        placedAt: Date.now()
+      };
+      localStorage.setItem(`active_dice_bet_${currentUser.id}`, JSON.stringify(localRecord));
+    } catch (e) {
+      // LocalStorage quota or privacy mode
+    }
+
+    console.log(`[ATOMIC BET PLACED] User: ${currentUser.id} (${currentUser.username}) | Bet ID: ${betId} | Amount: ${betAmount} | Period: ${details.period} | Time (IST): ${istParts.formattedIST}`);
+    return betId;
+  };
+
+  // Atomic Dice Bet Settlement with Audit Logs
+  const settleActiveDiceBet = async (
+    betId: string, 
+    winAmount: number, 
+    multiplier: number, 
+    outcome: string, 
+    details: { diceRoll: number[]; diceSum: number; winPercentageApplied?: number }
+  ) => {
+    if (!currentUser) return;
+    const istParts = getISTParts();
+    const uRef = doc(db, 'users', currentUser.id);
+    const betRef = doc(db, 'bets', betId);
+    const gameRef = doc(db, 'games', 'dice');
+    const winTxId = `TX_${genId()}`;
+    const isWin = winAmount > 0;
+
+    await runTransaction(db, async (tx) => {
+      const betSnap = await tx.get(betRef);
+      if (!betSnap.exists()) {
+        console.warn('Bet record not found in Firestore during settlement:', betId);
+        return;
+      }
+      const betData = betSnap.data() as BetRecord;
+      if (betData.settlementStatus === 'settled') {
+        console.warn('Bet already settled:', betId);
+        return;
+      }
+
+      const uSnap = await tx.get(uRef);
+      const gSnap = await tx.get(gameRef);
+      const uData = uSnap.data() as UserProfile;
+      const gData = gSnap.data() as Game;
+
+      let curBal = uData.balance;
+      if (isWin) {
+        curBal += winAmount;
+      }
+
+      tx.update(uRef, {
+        balance: parseFloat(curBal.toFixed(2))
+      });
+
+      if (gSnap.exists()) {
+        tx.update(gameRef, {
+          totalBets: (gData.totalBets || 0) + 1,
+          totalVolume: (gData.totalVolume || 0) + betData.betAmount
+        });
+      }
+
+      tx.update(betRef, {
+        status: isWin ? 'win' : 'loss',
+        settlementStatus: 'settled',
+        winAmount: parseFloat(winAmount.toFixed(2)),
+        multiplier: parseFloat(multiplier.toFixed(2)),
+        outcome,
+        diceRoll: details.diceRoll,
+        diceSum: details.diceSum,
+        winPercentageApplied: details.winPercentageApplied,
+        timeIST: istParts.formattedIST
+      });
+
+      if (isWin) {
+        const winTxObj: Transaction = {
+          id: winTxId,
+          userId: currentUser.id,
+          username: currentUser.username,
+          type: 'win',
+          amount: parseFloat(winAmount.toFixed(2)),
+          status: 'completed',
+          reference: `WIN_${betId.slice(4)}`,
+          date: istParts.formattedIST,
+          description: `Settled winnings on Dice 5-Minute Challenge (Multiplier x${multiplier}) [Period: ${betData.period || ''}]`
+        };
+        tx.set(doc(db, 'transactions', winTxId), winTxObj);
+      }
+    });
+
+    try {
+      localStorage.removeItem(`active_dice_bet_${currentUser.id}`);
+    } catch (e) {
+      // Ignore
+    }
+
+    if (isWin) {
+      addLocalNotification('🎉 Winner!', `You won ${winAmount.toFixed(2)} on Dice 5-Minute Challenge! (x${multiplier})`, 'system');
+    }
+
+    console.log(`[ATOMIC BET SETTLED] User: ${currentUser.id} (${currentUser.username}) | Bet ID: ${betId} | Payout: ${winAmount} | Multiplier: x${multiplier} | Roll: [${details.diceRoll.join(',')}] (Sum: ${details.diceSum}) | Win%: ${details.winPercentageApplied}% | Time (IST): ${istParts.formattedIST} | Status: ${isWin ? 'WIN' : 'LOSS'}`);
   };
 
   // Support Tickets
@@ -2415,6 +2634,8 @@ We have assigned you a dedicated chat support agent and he will shortly reply to
       deleteBankAccount,
       claimReferralEarnings,
       playGame,
+      placeActiveDiceBet,
+      settleActiveDiceBet,
       createTicket,
       addMessageToTicket,
       editTicketMessage,

@@ -13,22 +13,22 @@ import {
   Plus,
   Repeat
 } from 'lucide-react';
+import { TimeManager, getISTParts, calculateISTPeriodFromInput } from '../utils/TimeManager';
 
 export const GlobalDiceController: React.FC = () => {
   const { games, adminUpdateDiceGlobalOverrides } = usePlatform();
   const diceGame = games.find(g => g.id === 'dice');
   const globalOverrides = diceGame?.globalDiceOverrides || {};
 
-  // Date and Time selectors
+  // Date and Time selectors in IST
   const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+    return getISTParts().dateStr;
   });
   const [selectedHour, setSelectedHour] = useState<string>(() => {
-    return String(new Date().getHours()).padStart(2, '0');
+    return String(getISTParts().hours).padStart(2, '0');
   });
   const [selectedMinute, setSelectedMinute] = useState<string>(() => {
-    const min = new Date().getMinutes();
+    const min = getISTParts().minutes;
     const rounded = Math.floor(min / 5) * 5;
     return String(rounded).padStart(2, '0');
   });
@@ -37,9 +37,9 @@ export const GlobalDiceController: React.FC = () => {
   const [isRepeating, setIsRepeating] = useState<boolean>(true);
 
   // Override attributes
-  const [outcome, setOutcome] = useState<'win' | 'lose' | 'random'>('win');
+  const [outcome, setOutcome] = useState<'win' | 'lose' | 'random'>('random');
   const [targetCombo, setTargetCombo] = useState<string>('any');
-  const [winPct, setWinPct] = useState<number>(100); // Default to 100% winning percentage
+  const [winPct, setWinPct] = useState<number>(75); // Default to 75% winning percentage
   const [lossPct, setLossPct] = useState<number>(100); 
 
   // Interactive Live Calculator Inputs
@@ -48,38 +48,19 @@ export const GlobalDiceController: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Sync to current time frame immediately
+  // Sync to current IST time frame immediately
   const setToCurrentTimeFrame = () => {
-    const now = new Date();
-    setSelectedDate(now.toISOString().split('T')[0]);
-    setSelectedHour(String(now.getHours()).padStart(2, '0'));
-    const currentMin = now.getMinutes();
+    const ist = getISTParts();
+    setSelectedDate(ist.dateStr);
+    setSelectedHour(String(ist.hours).padStart(2, '0'));
+    const currentMin = ist.minutes;
     const roundedMin = Math.floor(currentMin / 5) * 5;
     setSelectedMinute(String(roundedMin).padStart(2, '0'));
   };
 
-  // Calculate the 5-minute Frame/Period ID based on selection
+  // Calculate the 5-minute Frame/Period ID based on selection in IST
   const getCalculatedPeriodId = (): { periodId: string; timeStr: string } => {
-    if (!selectedDate) {
-      return { periodId: '', timeStr: '' };
-    }
-    const parts = selectedDate.split('-');
-    if (parts.length !== 3) return { periodId: '', timeStr: '' };
-    
-    const [year, month, day] = parts;
-    const yyyymmdd = `${year}${month}${day}`;
-    const hrVal = parseInt(selectedHour) || 0;
-    const minVal = parseInt(selectedMinute) || 0;
-    const periodIndex = Math.floor((hrVal * 60 + minVal) / 5) + 1;
-    const idxStr = String(periodIndex).padStart(3, '0');
-    
-    const periodId = isRepeating ? `daily-${idxStr}` : `${yyyymmdd}-${idxStr}`;
-    
-    const endMin = (minVal + 5) % 60;
-    const endHr = minVal + 5 >= 60 ? (hrVal + 1) % 24 : hrVal;
-    const timeStr = `${String(hrVal).padStart(2, '0')}:${String(minVal).padStart(2, '0')} - ${String(endHr).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
-    
-    return { periodId, timeStr };
+    return calculateISTPeriodFromInput(selectedDate, selectedHour, selectedMinute, isRepeating);
   };
 
   const { periodId, timeStr } = getCalculatedPeriodId();
@@ -95,14 +76,11 @@ export const GlobalDiceController: React.FC = () => {
     try {
       const slotData: any = { 
         outcome,
-        isRepeating 
+        isRepeating,
+        target: targetCombo || 'any',
+        winPct: outcome === 'lose' ? 0 : winPct,
+        lossPct: outcome === 'win' ? 0 : (outcome === 'lose' ? lossPct : 100)
       };
-      if (outcome === 'win') {
-        if (targetCombo !== undefined) slotData.target = targetCombo;
-        if (winPct !== undefined) slotData.winPct = winPct;
-      } else if (outcome === 'lose') {
-        if (lossPct !== undefined) slotData.lossPct = lossPct;
-      }
 
       const updatedOverrides = {
         ...globalOverrides,
@@ -113,7 +91,7 @@ export const GlobalDiceController: React.FC = () => {
       
       setStatusMsg({
         type: 'success',
-        text: 'Saved Global Override!',
+        text: 'Saved Global Override (IST)!',
       });
       
       setTimeout(() => setStatusMsg(null), 2500);
@@ -208,8 +186,9 @@ export const GlobalDiceController: React.FC = () => {
   };
 
   // Calculate live return preview values
-  const winPayout = testBetAmount + (testBetAmount * winPct / 100);
-  const lossPayout = testBetAmount * ((100 - lossPct) / 100);
+  const effectiveWinRate = outcome === 'lose' ? 0 : winPct;
+  const winPayout = testBetAmount + (testBetAmount * (effectiveWinRate / 100));
+  const lossPayout = lossPct >= 100 ? 0 : (testBetAmount * ((100 - lossPct) / 100));
 
   const presetsWinningCombos = [
     { value: 'any', label: '✨ Any Choice' },
@@ -221,7 +200,7 @@ export const GlobalDiceController: React.FC = () => {
 
   return (
     <div className="bg-slate-950 border-2 border-slate-800 p-6 rounded-3xl space-y-6 text-left shadow-2xl relative overflow-hidden text-xs text-slate-100">
-      {/* Aesthetic pairing of Space Grotesk-like style and dark slate palette */}
+      {/* Background glow decoration */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
       
       {/* Mini Header */}
@@ -230,10 +209,10 @@ export const GlobalDiceController: React.FC = () => {
           <span className="text-2xl bg-indigo-500/20 p-2.5 rounded-2xl border-2 border-indigo-500/30">🎲</span>
           <div>
             <h4 className="text-base font-black text-white flex items-center gap-1.5 leading-none">
-              Dice Controller
+              Global Dice Controller
             </h4>
             <p className="text-[11px] text-slate-300 mt-1 font-mono font-bold">
-              Target ID Frame Rigging Settings
+              Target ID Frame Rigging & Random Win Rate Controller (All Players)
             </p>
           </div>
         </div>
@@ -354,7 +333,7 @@ export const GlobalDiceController: React.FC = () => {
           {/* Outcome Decision Row */}
           <div className="bg-slate-900/90 p-4 rounded-2xl border-2 border-slate-800 space-y-3">
             <span className="text-[11.5px] font-black text-indigo-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
-              <ShieldAlert className="h-4 w-4 text-indigo-400" /> 2. Manual Outcome
+              <ShieldAlert className="h-4 w-4 text-indigo-400" /> 2. Outcome & Winning Strategy
             </span>
 
             {/* Compact Outcome tabs */}
@@ -395,7 +374,7 @@ export const GlobalDiceController: React.FC = () => {
                 }`}
               >
                 <span className="text-xl">🎲</span>
-                <span className="text-[10px] uppercase font-black tracking-wider mt-1.5">Randomized</span>
+                <span className="text-[10px] uppercase font-black tracking-wider mt-1.5">Random Win %</span>
               </button>
             </div>
 
@@ -403,7 +382,7 @@ export const GlobalDiceController: React.FC = () => {
             {outcome === 'win' && (
               <div className="space-y-3.5 pt-1.5 animate-fadeIn">
                 <label className="text-[10px] font-extrabold text-slate-300 uppercase tracking-wider block font-mono">
-                  Winning Combination / Number
+                  Winning Combination / Target Sum
                 </label>
                 
                 {/* Horizontal wrap for predictions */}
@@ -453,7 +432,7 @@ export const GlobalDiceController: React.FC = () => {
           <div className="bg-slate-900/90 p-4 rounded-2xl border-2 border-slate-800 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-[11.5px] font-black text-indigo-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
-                <Coins className="h-4 w-4 text-indigo-400" /> 3. Winning Percentage
+                <Coins className="h-4 w-4 text-indigo-400" /> 3. Winning Percentage & Win Rate
               </span>
               <span className="text-[10px] font-black font-mono bg-indigo-500/20 text-indigo-300 px-2.5 py-0.5 rounded-full border border-indigo-500/30">
                 0% - 100% Win Rate
@@ -463,10 +442,10 @@ export const GlobalDiceController: React.FC = () => {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-extrabold text-slate-300 uppercase tracking-wider block font-mono">
-                  Exact Win Rate for Users
+                  {outcome === 'random' ? 'Win Probability (Win Rate %)' : outcome === 'win' ? 'Forced Win Rate / Return %' : 'Loss Rate %'}
                 </label>
                 <span className="text-xs font-mono font-black text-indigo-300 bg-indigo-950 px-2.5 py-1 rounded-xl border border-indigo-500/20">
-                  {outcome === 'lose' ? (100 - lossPct) : winPct}% Win
+                  {effectiveWinRate}% Win Rate
                 </span>
               </div>
 
@@ -508,8 +487,26 @@ export const GlobalDiceController: React.FC = () => {
                 </div>
               </div>
 
+              {/* Payout return status boxes */}
+              <div className="grid grid-cols-2 gap-2 text-[10px] pt-1">
+                <div className="p-2 rounded-xl border bg-emerald-500/10 border-emerald-500/20">
+                  <span className="text-slate-400 block text-[9.5px] font-bold">ESTIMATED WIN RETURN (ON $100)</span>
+                  <strong className="text-emerald-400 font-mono text-xs block">${winPayout.toFixed(2)} (+${(winPayout - testBetAmount).toFixed(2)} Profit)</strong>
+                </div>
+
+                <div className="p-2 rounded-xl border bg-rose-500/10 border-rose-500/20">
+                  <span className="text-slate-400 block text-[9.5px] font-bold">ESTIMATED LOSS RETURN (ON $100)</span>
+                  <strong className="text-rose-400 font-mono text-xs block">${lossPayout.toFixed(2)} (-${(testBetAmount - lossPayout).toFixed(2)} Loss)</strong>
+                </div>
+              </div>
+
               <p className="text-[10px] text-slate-400 leading-normal font-bold font-mono">
-                During this slot, players' return is rigged to exactly <span className="text-indigo-400 font-extrabold">{outcome === 'lose' ? (100 - lossPct) : winPct}%</span> of their bet amount.
+                {outcome === 'random'
+                  ? `🎲 During this slot, all players have a ${winPct}% randomized probability to win their bets on their chosen predictions with a +${winPct}% profit payout.`
+                  : outcome === 'win'
+                  ? `👑 During this slot, all players are 100% GUARANTEED TO WIN on any choice they bet on with a +${winPct}% profit payout ($100 bet ➔ $${winPayout.toFixed(2)} total return).`
+                  : `❌ During this slot, all players are 100% GUARANTEED TO LOSE (${lossPct}% loss).`
+                }
               </p>
             </div>
           </div>
@@ -519,7 +516,7 @@ export const GlobalDiceController: React.FC = () => {
         <div className="lg:col-span-5 bg-slate-900/90 p-4 rounded-2xl border-2 border-slate-800 flex flex-col space-y-3">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <span className="text-[11.5px] font-black text-indigo-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
-              Active Overrides
+              Active Global Overrides
             </span>
             <span className="text-[10.5px] font-black font-mono bg-indigo-500/20 text-indigo-300 px-2.5 py-0.5 rounded-full border border-indigo-500/30">
               {globalOverrides ? Object.keys(globalOverrides).length : 0} Total
@@ -532,7 +529,7 @@ export const GlobalDiceController: React.FC = () => {
                 <AlertCircle className="h-8 w-8 text-slate-500 mb-2.5" />
                 <span className="text-[11px] text-slate-200 font-extrabold uppercase tracking-wider font-mono">No Active Overrides</span>
                 <span className="text-[10px] text-slate-400 mt-1.5 max-w-[190px] leading-relaxed font-medium">
-                  Every round operates under normal RNG. Click Save Overriding Slot to rig a time slot.
+                  Every round operates under standard RNG. Click Save Overriding Slot to rig a time slot.
                 </span>
               </div>
             ) : (
@@ -540,6 +537,8 @@ export const GlobalDiceController: React.FC = () => {
                 .sort(([slotA], [slotB]) => slotA.localeCompare(slotB))
                 .map(([slotId, override]) => {
                   const isWin = override.outcome === 'win';
+                  const isLoss = override.outcome === 'lose';
+                  const isRandom = override.outcome === 'random';
                   const isRepeated = slotId.startsWith('daily-');
                   return (
                     <div
@@ -547,7 +546,9 @@ export const GlobalDiceController: React.FC = () => {
                       className={`p-3 rounded-xl border-2 text-left transition-all relative overflow-hidden flex items-center justify-between ${
                         isWin 
                           ? 'bg-emerald-950/30 border-emerald-800 hover:border-emerald-500' 
-                          : 'bg-rose-950/30 border-rose-800 hover:border-rose-500'
+                          : isLoss
+                          ? 'bg-rose-950/30 border-rose-800 hover:border-rose-500'
+                          : 'bg-blue-950/30 border-blue-800 hover:border-blue-500'
                       }`}
                     >
                       <div className="space-y-1.5">
@@ -556,9 +557,13 @@ export const GlobalDiceController: React.FC = () => {
                             ID: {slotId}
                           </span>
                           <span className={`text-[9.5px] font-black uppercase px-2 py-0.5 rounded-full ${
-                            isWin ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
+                            isWin 
+                              ? 'bg-emerald-500/20 text-emerald-300' 
+                              : isLoss
+                              ? 'bg-rose-500/20 text-rose-300'
+                              : 'bg-blue-500/20 text-blue-300'
                           }`}>
-                            {isWin ? '👑 Win' : '❌ Loss'}
+                            {isWin ? '👑 Win' : isLoss ? '❌ Loss' : `🎲 Random (${override.winPct ?? 50}%)`}
                           </span>
                           {isRepeated && (
                             <span className="text-[9px] bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wider font-mono flex items-center gap-1">
@@ -574,8 +579,10 @@ export const GlobalDiceController: React.FC = () => {
                         <div className="text-[9.5px] text-slate-300 font-bold font-mono">
                           {isWin ? (
                             <span>Combos: <strong className="text-emerald-300 uppercase">{override.target || 'any'}</strong> (Win Rate: <strong className="text-indigo-300 font-extrabold">{override.winPct ?? 100}%</strong>)</span>
+                          ) : isLoss ? (
+                            <span>Outcome: <strong className="text-rose-300">Loss</strong> (Loss Rate: <strong className="text-rose-300 font-extrabold">{override.lossPct ?? 100}%</strong>)</span>
                           ) : (
-                            <span>Outcome: <strong className="text-rose-300">Loss</strong> (Win Rate: <strong className="text-rose-300 font-extrabold">{override.lossPct !== undefined ? (100 - override.lossPct) : 0}%</strong>)</span>
+                            <span>Win Rate: <strong className="text-blue-300 font-extrabold">{override.winPct ?? 50}%</strong> (Loss Rate: <strong className="text-slate-400">{override.lossPct ?? 50}%</strong>)</span>
                           )}
                         </div>
                       </div>

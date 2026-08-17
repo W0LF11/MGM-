@@ -44,6 +44,7 @@ export interface UserProfile {
     target?: string;
     winPct?: number;
     lossPct?: number;
+    isRepeating?: boolean;
   }>;
 }
 
@@ -143,6 +144,14 @@ export interface BetRecord {
   outcome: string; // e.g. "Heads", "Red 7", "Win"
   date: string;
   status: 'win' | 'loss' | 'pending';
+  period?: string;
+  choices?: string[];
+  perBetAmount?: number;
+  timeIST?: string;
+  winPercentageApplied?: number;
+  settlementStatus?: 'pending' | 'settled';
+  diceRoll?: number[];
+  diceSum?: number;
 }
 
 export interface SupportMessage {
