@@ -59,6 +59,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../context/firebase';
 import { signInWithEmailAndPassword, updatePassword } from 'firebase/auth';
 import { doc, runTransaction, updateDoc, setDoc } from 'firebase/firestore';
+import { formatISTTime, formatISTDateTime, formatISTDateOnly } from '../utils/TimeManager';
 
 // Local Utilities to avoid import mismatches
 const genId = () => Math.random().toString(36).substring(2, 11).toUpperCase();
@@ -1451,7 +1452,7 @@ export const AdminPanel: React.FC = () => {
                             <span className="text-[9px] text-slate-400 font-mono">ID: {req.userId}</span>
                           </td>
                           <td className="py-4 px-4 font-mono text-slate-500">
-                            {req.date ? new Date(req.date).toLocaleString() : 'N/A'}
+                            {req.date ? formatISTDateTime(req.date) : 'N/A'}
                           </td>
                           <td className="py-4 px-4 font-mono">
                             {req.gateway || 'N/A'}
@@ -1861,8 +1862,8 @@ export const AdminPanel: React.FC = () => {
                         // Get latest message snippet and time (WhatsApp style)
                         const lastMsg = t.messages && t.messages.length > 0 ? t.messages[t.messages.length - 1] : null;
                         const lastMsgTime = lastMsg?.timestamp 
-                          ? new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : ((t as any).updatedAt ? new Date((t as any).updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
+                          ? formatISTTime(lastMsg.timestamp)
+                          : ((t as any).updatedAt ? formatISTTime((t as any).updatedAt) : '');
                         
                         return (
                           <div
@@ -2236,7 +2237,7 @@ export const AdminPanel: React.FC = () => {
                                         <span className={`text-[9px] font-mono ${
                                           isSupportSender ? 'text-indigo-300' : 'text-slate-400'
                                         }`}>
-                                          {m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                                          {m.timestamp ? formatISTTime(m.timestamp) : 'N/A'}
                                         </span>
                                         {m.isEdited && (
                                           <span className={`text-[9px] italic font-medium ${isSupportSender ? 'text-indigo-200' : 'text-slate-400'}`}>
@@ -2487,7 +2488,7 @@ export const AdminPanel: React.FC = () => {
                                             <span className={`text-[10px] font-mono ${
                                               isSupportSender ? 'text-indigo-300' : 'text-slate-400'
                                             }`}>
-                                              {m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                                              {m.timestamp ? formatISTTime(m.timestamp) : 'N/A'}
                                             </span>
                                             {m.isEdited && (
                                               <span className={`text-[10px] italic font-medium ${isSupportSender ? 'text-indigo-200' : 'text-slate-400'}`}>
@@ -2694,7 +2695,7 @@ export const AdminPanel: React.FC = () => {
                                 ${(player.balance ?? 0).toLocaleString('en-US')}
                               </td>
                               <td className="py-3.5 px-4 text-slate-400">
-                                {new Date(player.createdAt || Date.now()).toLocaleDateString()}
+                                {player.createdAt ? formatISTDateOnly(player.createdAt) : 'N/A'}
                               </td>
                             </tr>
                           ))
@@ -3194,7 +3195,7 @@ export const AdminPanel: React.FC = () => {
                             <div key={t.id ? `${t.id}-${idx}` : idx} className="p-2 bg-slate-50 border border-slate-150 rounded-lg flex justify-between font-mono text-[10.5px]">
                               <div>
                                 <span className="font-bold text-slate-800 block capitalize">{t.type}</span>
-                                <span className="text-[9px] text-slate-400 block">{t.date ? new Date(t.date).toLocaleString() : 'N/A'}</span>
+                                <span className="text-[9px] text-slate-400 block">{t.date ? formatISTDateTime(t.date) : 'N/A'}</span>
                               </div>
                               <div className="text-right">
                                 <span className={`font-bold block ${isAdd ? 'text-emerald-600' : 'text-rose-600'}`}>

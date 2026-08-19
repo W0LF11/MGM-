@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { SupportTicket, SupportMessage } from '../types';
 import { compressFileForChat } from '../utils/imageCompressor';
+import { formatISTTime } from '../utils/TimeManager';
 
 export const Support: React.FC = () => {
   const { 
@@ -549,7 +550,7 @@ export const Support: React.FC = () => {
 
                       {/* Timestamp & Message Actions footer */}
                       <div className={`flex items-center gap-1.5 text-[9px] text-slate-400/80 font-mono mt-0.5 px-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                        <span>{m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                        <span>{m.timestamp ? formatISTTime(m.timestamp) : ''}</span>
                       </div>
                     </div>
 

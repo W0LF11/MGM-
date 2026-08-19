@@ -130,8 +130,8 @@ const PlatformContext = createContext<PlatformContextType | undefined>(undefined
 // Generate random IDs
 const genId = () => Math.random().toString(36).substr(2, 9).toUpperCase();
 
-// Helper to format date in Indian Standard Time (IST)
-const formatDate = () => TimeManager.formatIST();
+// Helper to format date consistently
+const formatDate = () => new Date().toISOString();
 
 // Derivative Password helper to maintain identical login page behavior
 const getDerivedPassword = (email: string) => {

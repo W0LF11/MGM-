@@ -39,6 +39,78 @@ export class TimeManager {
   private static serverTimeOffsetMs: number = 0;
 
   /**
+   * Universal Date parser that safely handles:
+   * - Custom IST strings (e.g., "2026-08-19 14:05:30 IST", "2026-08-19 14:05:30")
+   * - Standard ISO-8601 strings (e.g., "2026-08-19T08:35:00.000Z")
+   * - Milliseconds timestamps / epoch numbers
+   * - Firestore Timestamp objects ({ seconds, nanoseconds } or { toDate: () => Date })
+   * - Native JavaScript Date instances
+   */
+  public static parseDate(val: any): Date {
+    if (val === null || val === undefined || val === '') {
+      return new Date(this.now());
+    }
+
+    if (val instanceof Date) {
+      return isNaN(val.getTime()) ? new Date(this.now()) : val;
+    }
+
+    if (typeof val === 'number') {
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? new Date(this.now()) : d;
+    }
+
+    if (typeof val === 'object') {
+      if (typeof val.toDate === 'function') {
+        try {
+          const d = val.toDate();
+          if (d instanceof Date && !isNaN(d.getTime())) return d;
+        } catch (e) {
+          // ignore
+        }
+      }
+      if (typeof val.seconds === 'number') {
+        const ms = val.seconds * 1000 + (typeof val.nanoseconds === 'number' ? Math.floor(val.nanoseconds / 1000000) : 0);
+        const d = new Date(ms);
+        if (!isNaN(d.getTime())) return d;
+      }
+    }
+
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (!trimmed) return new Date(this.now());
+
+      // Strip trailing "IST" if present
+      const cleaned = trimmed.replace(/\s+IST$/i, '').trim();
+
+      // Check for YYYY-MM-DD HH:mm:ss or YYYY-MM-DDTHH:mm:ss patterns without timezone
+      const match = cleaned.match(/^(\d{4})-(\d{1,2})-(\d{1,2})[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?(?:\.(\d+))?(Z|([+-]\d{2}:?\d{2}))?$/i);
+      if (match) {
+        const [, y, mo, d, h, mi, s, ms, tz] = match;
+        if (tz) {
+          const parsed = new Date(cleaned);
+          if (!isNaN(parsed.getTime())) return parsed;
+        }
+        // If no explicit timezone specified, assume it was stamped in IST (+05:30)
+        const sec = s || '00';
+        const msec = ms ? `.${ms}` : '';
+        const isoWithIST = `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}T${h.padStart(2, '0')}:${mi.padStart(2, '0')}:${sec.padStart(2, '0')}${msec}+05:30`;
+        const parsedWithTz = new Date(isoWithIST);
+        if (!isNaN(parsedWithTz.getTime())) return parsedWithTz;
+      }
+
+      // Try standard native parser
+      const standardParsed = new Date(trimmed);
+      if (!isNaN(standardParsed.getTime())) return standardParsed;
+
+      const cleanedParsed = new Date(cleaned);
+      if (!isNaN(cleanedParsed.getTime())) return cleanedParsed;
+    }
+
+    return new Date(this.now());
+  }
+
+  /**
    * Synchronize local client time with server/cloud timestamp
    */
   public static syncServerTime(serverTimestampMs: number): void {
@@ -57,8 +129,8 @@ export class TimeManager {
   /**
    * Returns exact IST time components for any given date or timestamp
    */
-  public static getParts(baseDate: Date | number = this.now()): ISTTimeParts {
-    const d = typeof baseDate === 'number' ? new Date(baseDate) : baseDate;
+  public static getParts(baseDate: any = this.now()): ISTTimeParts {
+    const d = this.parseDate(baseDate);
     
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Kolkata',
@@ -126,6 +198,45 @@ export class TimeManager {
       formattedIST,
       remainingSeconds5Min
     };
+  }
+
+  /**
+   * Formats a timestamp into an IST time string: "HH:mm" (e.g. "21:35" or "14:05")
+   * Guaranteed never to return "Invalid Date".
+   */
+  public static formatTime(val: any, includeSeconds: boolean = false): string {
+    if (val === null || val === undefined || val === '') return '';
+    const parts = this.getParts(val);
+    const hh = String(parts.hours).padStart(2, '0');
+    const mm = String(parts.minutes).padStart(2, '0');
+    if (includeSeconds) {
+      const ss = String(parts.seconds).padStart(2, '0');
+      return `${hh}:${mm}:${ss}`;
+    }
+    return `${hh}:${mm}`;
+  }
+
+  /**
+   * Formats a timestamp into a full readable IST date & time string: "YYYY-MM-DD HH:mm:ss" or "YYYY-MM-DD HH:mm"
+   */
+  public static formatDateTime(val: any, includeSeconds: boolean = true): string {
+    if (val === null || val === undefined || val === '') return 'N/A';
+    const parts = this.getParts(val);
+    const hh = String(parts.hours).padStart(2, '0');
+    const mm = String(parts.minutes).padStart(2, '0');
+    if (includeSeconds) {
+      const ss = String(parts.seconds).padStart(2, '0');
+      return `${parts.dateStr} ${hh}:${mm}:${ss}`;
+    }
+    return `${parts.dateStr} ${hh}:${mm}`;
+  }
+
+  /**
+   * Formats a timestamp into an IST date string: "YYYY-MM-DD"
+   */
+  public static formatDateOnly(val: any): string {
+    if (val === null || val === undefined || val === '') return 'N/A';
+    return this.getParts(val).dateStr;
   }
 
   /**
@@ -269,14 +380,18 @@ export class TimeManager {
 }
 
 // Standalone function exports for backward compatibility & easy functional imports
-export const getISTParts = (baseDate?: Date | number) => TimeManager.getParts(baseDate);
-export const getISTPeriod = (baseDate?: Date | number) => TimeManager.getPeriod(baseDate);
-export const getISTRemainingSeconds = (baseDate?: Date | number) => TimeManager.getRemainingSeconds(baseDate);
-export const getISTTimeSlot = (baseDate?: Date | number) => TimeManager.getTimeSlot(baseDate);
-export const getISTPeriodIndex = (baseDate?: Date | number) => TimeManager.getPeriodIndex(baseDate);
-export const getISTPeriodWithOffset = (offset5Min: number, baseDate?: Date | number) => TimeManager.getPeriodWithOffset(offset5Min, baseDate);
-export const getISTPartsWithOffset = (offset5Min: number, baseDate?: Date | number) => TimeManager.getPartsWithOffset(offset5Min, baseDate);
-export const getCandidatePeriodKeys = (periodIdOrDate?: string | Date | number) => TimeManager.getCandidatePeriodKeys(periodIdOrDate);
+export const getISTParts = (baseDate?: any) => TimeManager.getParts(baseDate);
+export const getISTPeriod = (baseDate?: any) => TimeManager.getPeriod(baseDate);
+export const getISTRemainingSeconds = (baseDate?: any) => TimeManager.getRemainingSeconds(baseDate);
+export const getISTTimeSlot = (baseDate?: any) => TimeManager.getTimeSlot(baseDate);
+export const getISTPeriodIndex = (baseDate?: any) => TimeManager.getPeriodIndex(baseDate);
+export const getISTPeriodWithOffset = (offset5Min: number, baseDate?: any) => TimeManager.getPeriodWithOffset(offset5Min, baseDate);
+export const getISTPartsWithOffset = (offset5Min: number, baseDate?: any) => TimeManager.getPartsWithOffset(offset5Min, baseDate);
+export const getCandidatePeriodKeys = (periodIdOrDate?: any) => TimeManager.getCandidatePeriodKeys(periodIdOrDate);
 export const calculateISTPeriodFromInput = (dateStr: string, hourStr: string, minuteStr: string, isRepeating: boolean) => 
   TimeManager.calculatePeriodFromInput(dateStr, hourStr, minuteStr, isRepeating);
-export const getISTTimestamp = (baseDate?: Date | number) => TimeManager.now();
+export const getISTTimestamp = (baseDate?: any) => TimeManager.now();
+export const formatISTTime = (val: any, includeSeconds?: boolean) => TimeManager.formatTime(val, includeSeconds);
+export const formatISTDateTime = (val: any, includeSeconds?: boolean) => TimeManager.formatDateTime(val, includeSeconds);
+export const formatISTDateOnly = (val: any) => TimeManager.formatDateOnly(val);
+export const parseISTDate = (val: any) => TimeManager.parseDate(val);
